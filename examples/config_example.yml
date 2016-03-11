@@ -1,0 +1,8 @@
+################################################################
+GENERAL:
+################################################################
+  CLIENT_ID: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
+  CLIENT_SECRET: "yyyyyyyyyyyyyyyyyyyyyyyy"
+  TOKEN_STORE: "/Users/nom/.config/glima/token_store.yml"
+  CONTEXT_STORE: "/Users/nom/.config/glima/context.yml"
+  DEFAULT_USER: "????????@gmail.com"

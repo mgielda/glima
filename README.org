@@ -1,0 +1,50 @@
+#+TITLE: Glima -- Gmail CLI client.
+#+AUTHOR:
+#+EMAIL:
+#+DATE:
+#+OPTIONS: H:3 num:2 toc:nil
+#+OPTIONS: ^:nil @:t \n:nil ::t |:t f:t TeX:t
+#+OPTIONS: skip:nil
+#+OPTIONS: author:t
+#+OPTIONS: email:nil
+#+OPTIONS: creator:nil
+#+OPTIONS: timestamp:nil
+#+OPTIONS: timestamps:nil
+#+OPTIONS: d:nil
+#+OPTIONS: tags:t
+#+TEXT:
+#+DESCRIPTION:
+#+KEYWORDS:
+#+LANGUAGE: ja
+#+STARTUP: odd
+#+LATEX_CLASS: jsarticle
+#+LATEX_CLASS_OPTIONS: [a4j,dvipdfmx]
+# #+LATEX_HEADER: \usepackage{plain-article}
+# #+LATEX_HEADER: \renewcommand\maketitle{}
+# #+LATEX_HEADER: \pagestyle{empty}
+# #+LaTeX: \thispagestyle{empty}
+
+* Installation
+  #+BEGIN_SRC sh
+    $ gem install bundler
+    $ mkdir /path/to/install/glima
+    $ cd /path/to/install/glima
+    $ bundle init
+    $ echo 'gem "glima"' >> Gemfile
+    $ bundle install --path=vendor/bundle --binstubs=exe
+    $ export PATH=/path/to/install/glima/exe:$PATH
+  #+END_SRC
+
+* Setup
+  #+BEGIN_SRC sh
+    # Create mail cache directory
+    $ mkdir -p ~/Mail/all
+
+    # Create config file
+    $ mkdir -p ~/.config/glima
+    $ cp examples/config_example.yml ~/.config/glima/config.yml
+    $ vi ~/.config/glima/config.yml
+
+    # Check your inbox
+    $ glima scan +inbox
+  #+END_SRC

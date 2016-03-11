@@ -1,0 +1,668 @@
+#!/usr/bin/env ruby
+
+################################################################
+# rbenv support:
+# If this file is a symlink, and bound to a specific ruby
+# version via rbenv (indicated by RBENV_VERSION),
+# I want to resolve the symlink and re-exec
+# the original executable respecting the .ruby_version
+# which should indicate the right version.
+#
+if File.symlink?(__FILE__) and ENV["RBENV_VERSION"]
+  ENV["RBENV_VERSION"] = nil
+  shims_path = File.expand_path("shims", ENV["RBENV_ROOT"])
+  ENV["PATH"] = shims_path + ":" + ENV["PATH"]
+  exec(File.readlink(__FILE__), *ARGV)
+end
+
+gemfile = File.expand_path("../../Gemfile", __FILE__)
+
+if File.exists?(gemfile + ".lock")
+  ENV["BUNDLE_GEMFILE"] = gemfile
+  require "bundler/setup"
+end
+
+require "rubygems"
+require "glima"
+require "mail"
+
+Encoding.default_external="UTF-8"
+
+class GlimaCLI < Glima::Cli
+  package_name 'GLIMA'
+
+  ################################################################
+  # register frequently used options
+
+  named_option :format,     :desc => "Set printing format", :enum => %w(short full metadata minimal raw mewl)
+  named_option :dry_run,    :desc => "Perform a trial run with no changes made", :type => :boolean
+
+
+  ################################################################
+  # Command: contacts
+  ################################################################
+  desc "contacts", "List contacts"
+
+  def contacts
+  end
+
+  ################################################################
+  # Command: labels
+  ################################################################
+  desc "labels", "List labels"
+
+  expand_option :format
+
+  def labels
+    response = client.list_user_labels('me')
+    puts 'No files found' if response.labels.empty?
+
+    all_ids = response.labels.map(&:id)
+    total = all_ids.length
+
+    if options[:format] == 'short'
+      response.labels.sort_by(&:name).each do |label|
+        # puts "(\"#{label.id}\" . \"#{label.name}\")"
+        puts "#{label.name}"
+      end
+      return 0
+    end
+
+    # Gmail API has rate limit at 250 req/sec/user (deps on type of method)
+    # https://developers.google.com/gmail/api/v1/reference/quota
+    all_ids.each_slice(100) do |ids|
+      client.batch do |batch_client|
+        ids.each_with_index do |id, i|
+          batch_client.get_user_label('me', id) do |label, err|
+            puts "--- #{i+1}/#{total} -------------------------------------------------"
+            if label
+              puts Glima::Resource::Label.new(label).dump
+            else
+              puts "Error: #{err}"
+            end
+          end
+        end # ids
+      end # batch
+      sleep 1
+    end
+  end
+
+  ################################################################
+  # Command: label
+  ################################################################
+  desc "label MESSAGE_ID", "Add/Remove labels to/from MESSAGE_ID"
+
+  method_option :add, :desc => "List of label names to add separated by comma"
+  method_option :remove, :desc => "List of label names to remove separated by comma"
+
+  def label(message_id)
+    req = {}
+
+    if add = options[:add]
+      req[:add_label_ids] = add.split(/ *, */)
+    end
+
+    if remove = options[:remove]
+      req[:remove_label_ids] = remove.split(/ *, */)
+    end
+
+    if req.empty?
+      puts "Do nothing."
+      return 0
+    end
+
+    req = Google::Apis::GmailV1::ModifyMessageRequest.new(req)
+
+    client.modify_message('me', message_id, req) do |res,err|
+      if res
+        puts "Update #{message_id} successfully."
+      else
+        puts "Error: #{err}"
+      end
+    end
+  end
+
+  ################################################################
+  # Command: trash
+  ################################################################
+  desc "trash MESSAGE_ID...", "Move messages to trash"
+
+  def trash(*message_ids)
+    if message_ids.empty?
+      puts "Do nothing."
+      return 0
+    end
+
+    message_ids.each do |id|
+      client.trash_user_message('me', id, req) do |res,err|
+        if res
+          puts "Update #{message_id} successfully."
+        else
+          puts "Error: #{err}"
+        end
+      end
+    end
+  end
+
+
+  ################################################################
+  # Command: profile
+  ################################################################
+  desc "profile", "Show user's profile."
+
+  def profile
+    response = client.get_user_profile('me')
+    puts "emailAddress: #{response.email_address}"
+    puts "messagesTotal: #{response.messages_total}"
+    puts "threadsTotal: #{response.threads_total}"
+    puts "historyId: #{response.history_id}"
+  end
+
+  ################################################################
+  # Command: history
+  ################################################################
+  desc "history LAST_HISTORY_ID", "List operation history since LAST_HISTORY_ID."
+
+  def history(last_history_id)
+    response = nil
+    next_page_token = nil
+
+    begin
+      opt = {start_history_id: last_history_id}
+      opt[:page_token] = next_page_token if next_page_token
+
+      client.list_user_histories('me', opt) do |res, err|
+        if err
+          STDERR.puts "Error: #{err}"
+          exit 1
+        end
+        response = res
+      end
+      next_page_token = response.next_page_token
+
+      puts "nextPageToken: #{next_page_token}"
+      plus = next_page_token ? "+" : ""
+      puts "historyId: #{response.history_id}"
+
+      unless response.history
+        puts "No records since #{last_history_id}."
+        return 0
+      end
+
+      puts "#{response.history.length}#{plus} historie(s):"
+      response.history.each do |h|
+        puts "---------------------------"
+        puts "  id: #{h.id}"
+
+        puts "* Messages:"
+        h.messages.each do |m|
+          puts dump_message(m, 2)
+        end
+
+        puts "* MessagesAdded:"
+        h.messages_added.map(&:message).each do |m|
+          puts dump_message(m, 2)
+        end if h.messages_added
+
+        puts "* MessagesDeleted:"
+        h.messages_deleted.map(&:message).each do |m|
+          puts dump_message(m, 2)
+        end if h.messages_deleted
+
+        puts "* LabelsAdded:"
+        h.labels_added.each do |lm|
+          puts dump_message(lm.message, 2)
+          puts "  label_ids: " + lm.label_ids.join(',')
+        end if h.labels_added
+
+        puts "* LabelsRemoved:"
+        h.labels_removed.each do |lm|
+          puts dump_message(lm.message, 2)
+          puts "  label_ids: " + lm.label_ids.join(',')
+        end if h.labels_removed
+      end
+    end while next_page_token
+  end
+
+  ################################################################
+  # Command: scan
+  ################################################################
+  desc "scan +FOLDER SEARCH_OR_RANGE", "Scan mails in FOLDER with SEARCH_OR_RANGE."
+
+  def scan(folder, search_or_range = nil)
+    index = 1
+    scan_batch(folder, search_or_range) do |message|
+      puts format_message(index, message)
+      index += 1
+    end
+  end
+
+  ################################################################
+  # Command: mewl
+  ################################################################
+  desc "mewl +FOLDER [RANGE]", "Scan mails in FOLDER in mewl format."
+
+  def mewl(folder, range = nil)
+    scan_batch(folder, range) do |message|
+      puts format_message_mewl(message)
+      STDOUT.flush
+      _dummy = STDIN.gets
+    end
+  end
+
+  ################################################################
+  # Command: mewl
+  ################################################################
+  desc "mewl_orig +FOLDER SEARCH_STRING", "Scan mails in FOLDER in mewl format."
+
+  expand_option :format
+
+  # mewl -l 5 -c 10  -f Subject:,Date:,From:,To:,Cc:,Content-Type:,Content-Transfer-Encoding:,X-Mew-Uidl:,Message-Id:,In-Reply-To:,References:,X-Mew-Ref:,X-Bogosity:,Body
+  # +inbox
+  def mewl_orig(folder, search_string = nil)
+    # full:     Returns the full email message data with body content parsed in the payload field; the raw field is not used. (default)
+    # metadata: Returns only email message ID, labels, and email headers.
+    # minimal:  Returns only email message ID and labels; does not return the email headers, body, or payload.
+    # raw:      Returns the full email message data with body content in the raw field as a base64url encoded string; the payload field is not used.
+    format = options[:format] || "metadata"
+    unless %w(short full metadata minimal raw mewl).member?(format)
+      STDERR.puts "Unknown format: #{format}."
+      return 1
+    end
+
+    mewl = false
+    if format == "mewl"
+      format = "metadata"
+      mewl = true
+    end
+
+    if /^\+(\S+)/ =~ folder
+      opt = {q: "in:\"#{$1}\""}
+      folder = "+#{$1}"
+    else
+      STDERR.puts "Unknown folder format: #{folder}."
+      return 1
+    end
+
+    if search_string == 'next'
+      opt[:page_token] = File.open(config.general.context_store).read
+    else
+      opt[:q] += (search_string ? " #{search_string}" : "")
+    end
+
+    # puts "Folder: #{folder} q:#{q}"
+    client = Glima::GmailClient.new(config.general, self).client
+
+    # id: 152119f4ae69e1ef
+    # threadId: 152119f4ae69e1ef
+    response = client.list_user_messages('me', opt)
+    messages = response.messages
+    puts "GOT #{response.messages.length}/#{response.result_size_estimate}" if $DEBUG
+
+    if page_token = response.next_page_token
+      File.open(config.general.context_store, "w") do |f|
+        f.write page_token
+      end
+    end
+
+    total = response.result_size_estimate
+    puts "Total #{total} message(s)"  if $DEBUG
+    if messages.to_a.empty?
+      puts 'No messages found' if $DEBUG
+      return 0
+    end
+
+
+    # while page_token
+    #   response = client.list_user_messages('me', q: q, page_token: page_token)
+    #   puts "GOT #{response.messages.length}/#{response.result_size_estimate}" if $DEBUG
+    #   messages += response.messages
+    #   page_token = response.next_page_token
+    # end
+
+    count = 0
+
+    if format == 'short'
+      # id: 152119f4ae69e1ef
+      # threadId: 152119f4ae69e1ef
+      messages.each do |m|
+        count += 1
+        puts "--- #{count}/#{total} ----------------------------------------------"
+        puts dump_message(m).strip_heredoc
+      end
+      return 0
+    end
+
+    ids = messages.map(&:id)
+    total = ids.length
+
+    puts "NumOfMsg: #{total}" if mewl
+
+    client.batch do |batch_client|
+      ids.each do |id|
+        if File.exist?(folder_message_to_path("+all", id))
+          fmt = "minimal"
+        else
+          fmt = "raw"
+        end
+
+        batch_client.get_user_message('me', id, format: fmt) do |m, err|
+          count += 1
+          puts "--- #{count}/#{total} ----------------------------------------------" unless mewl
+          if m
+            if fmt == "raw"
+              save_message_in_id(m, "+all")
+            end
+            if mewl
+              mail = Mail.read(folder_message_to_path("+all", id))
+              mewl_message(folder, mail, m)
+              STDOUT.flush
+              _dummy = STDIN.gets
+            else
+              puts dump_message(m).strip_heredoc
+            end
+          else
+            puts "X-Error: #{err}"
+          end
+        end
+      end
+    end
+  end
+
+  ################################################################
+  # Command: show
+  ################################################################
+  desc "show MESSAGE_ID", "Show article by MESSAGE_ID"
+
+  def show(id)
+    batch_on_messages([id]) do |message|
+      puts message.raw
+    end
+  end
+
+  ################################################################
+  # Command: relabel
+  ################################################################
+  desc "relabel OLD_NAME NEW_NAME", "Rename label OLD_NAME to NEW_NAME."
+
+  expand_option :dry_run
+
+  def relabel(source_name, dest_name)
+    client = Glima::GmailClient.new(config.general, self).client
+
+    all_labels = client.list_user_labels('me').labels.sort_by(&:name)
+
+    if /\/$/ =~ dest_name
+      move_to_dir = true
+      dest_name = dest_name.sub(/\/$/, '')
+    else
+      move_to_dir = false
+    end
+
+    source_labels = all_labels.find_all {|x| File.fnmatch(source_name, x.name, File::FNM_PATHNAME)}
+    dest_label    = all_labels.find {|x| x.name == dest_name}
+
+    if source_labels.empty?
+      puts "Error: source #{source_name} not found"
+      return nil
+    end
+
+    if dest_label && !move_to_dir
+      puts "Error: dest #{dest_name} already exists"
+      return nil
+    end
+
+    if !dest_label && move_to_dir
+      puts "Error: dest #{dest_name} not found"
+      return nil
+    end
+
+    source_labels.each do |source_label|
+      dirtop = File.dirname(source_label.name)
+      sub_labels = all_labels.find_all {|x| File.fnmatch(source_label.name + '/*', x.name)}
+
+      ([source_label] + sub_labels).each do |label|
+        src = label.name
+        dst = dest_name + '/' + (label.name.sub(/^#{dirtop}\//, ''))
+
+        if all_labels.find {|x| x.name == dst}
+          puts "Error: relabel #{src} -> #{dst}: Destination already exists"
+          next
+        else
+          puts "relabel #{src} -> #{dst}"
+        end
+
+        unless options[:dry_run]
+          label_obj = Google::Apis::GmailV1::Label.new(id: label.id, name: dst)
+          client.patch_user_label('me', label.id, label_obj) do |response, err|
+            if response
+              # puts dump_label(response)
+            else
+              puts "Error: #{err}"
+            end
+          end
+        end
+      end
+    end
+  end
+
+
+  ################################################################
+  # Command: inc
+  ################################################################
+  desc "inc", "Incorporate messages into +inbox"
+
+  def inc
+    next_page_token = nil
+    count = 0
+
+    begin
+      opt = {q: "in:inbox"}
+      opt[:page_token] = next_page_token if next_page_token
+
+      response = client.list_user_messages('me', opt)
+
+      if response.messages.empty?
+        puts 'No messages found'
+        return 0
+      end
+
+      next_page_token = response.next_page_token
+
+      ids = []
+      response.messages.map(&:id).each do |id|
+        next if File.exist?(folder_message_to_path("+all", id))
+        ids << id
+      end
+
+      next if ids.empty?
+
+      client.batch do |batch_client|
+        ids.each do |id|
+          batch_client.get_user_message('me', id, format: "raw") do |m, err|
+            count += 1
+            if m
+              # id = save_message_in_num(m, "+all")
+              id = save_message_in_id(m, "+all")
+              puts "#{count} #{id} #{m.snippet[0..40]}..."
+            else
+              STDERR.puts "Error: #{err}"
+            end
+          end
+        end
+      end
+    end while next_page_token
+  end
+
+  ################################################################
+  # private
+
+  private
+
+  def scan_batch(folder, search_or_range = nil, &block)
+    qp = Glima::QueryParameter.new(folder, search_or_range, context)
+    client.list_user_messages('me', qp.to_hash) do |res, error|
+      fail "#{error}" if error
+      ids = res.messages.map(&:id)
+      batch_on_messages(ids) do |message|
+        yield message if block
+      end
+      context.save_page_token(res.next_page_token)
+    end
+  rescue Glima::QueryParameter::FormatError => e
+    STDERR.print "Error: " + e.message + "\n"
+  end
+
+  def format_message(count, message)
+    date = Time.at(message.internal_date.to_i/1000).strftime("%m/%d %H:%M")
+    return "#{"%4d" % count} #{date} #{message.id} #{message.snippet[0..30]}"
+  end
+
+  def format_message_mewl(message)
+    mail = Mail.read_from_string(message.raw)
+
+    required_headers =
+      %w(Subject Date From To Cc
+         X-Mew-Uidl
+         Message-Id In-Reply-To References
+         X-Mew-Ref X-Bogosity)
+
+    required_headers << "Content-Type" if mail.multipart?
+
+    result = "Folder: +all\n" +
+             "Filename: #{message.id}.eml\n" +
+             "Labels: #{message.label_ids.join(',')}\n"
+
+    required_headers.each do |h|
+      if header = mail.header[h]
+        result += "#{h}: #{header}\n"
+      end
+    end
+
+    result += "\n"
+
+    if mail.multipart?
+      result  += "--#{mail.content_type_parameters["boundary"]}\n" +
+                 "Content-Type: text/plain; charset=\"UTF-8\"\n" +
+                 "Content-Transfer-Encoding: 8bit\n\n"
+    end
+
+    snippet = CGI.unescapeHTML(message.snippet)
+    result += "." if /^\./ =~ snippet
+    result += "#{snippet}\n.\n"
+
+    return result
+  end
+
+  def store_page_token(page_token)
+    context.save_page_token(page_token)
+  end
+
+  def batch_on_messages(ids, &block)
+    client.batch do |batch_client|
+      ids.each do |id|
+        fmt = if datastore.exist?(id) then "minimal" else "raw" end
+
+        batch_client.get_user_message('me', id, format: fmt) do |m, err|
+          fail "#{err}" if err
+          message = datastore.update(m)
+          yield message
+        end
+      end
+    end
+  end
+
+  require "cgi"
+  # mewl -l 5 -c 5
+  # -f Subject:,Date:,From:,To:,Cc:,Content-Type:,Content-Transfer-Encoding:,X-Mew-Uidl:,Message-Id:,In-Reply-To:,References:,
+  #             X-Mew-Ref:,X-Bogosity:,Body +inbox| les
+  def mewl_message(folder, mail, metadata)
+    # puts "Folder: #{folder}"
+    puts "Folder: +all"
+    puts "Filename: #{metadata.id}.eml"
+    puts "Labels: #{metadata.label_ids.join(',')}" ##xxx
+    # if metadata.raw
+      # puts "#{dump_selective_headers_from_string(metadata.raw)}"
+      puts "#{dump_selective_headers_from_mail_object(mail)}"
+    # else
+    #  puts "#{dump_selective_headers(metadata.payload.headers)}"
+    # end
+
+    if mail.multipart?
+      puts "Content-Type: #{mail.content_type}"
+    end
+    print "\n"
+
+    if mail.multipart?
+      puts "--#{mail.content_type_parameters["boundary"]}"
+      puts 'Content-Type: text/plain; charset="UTF-8"'
+      puts "Content-Transfer-Encoding: 8bit"
+      print "\n"
+    end
+
+    print "." if /^\./ =~ metadata.snippet
+    puts "#{CGI.unescapeHTML(metadata.snippet)}"
+    puts "."
+  end
+
+  # def dump_selective_headers(headers)
+  #   required_headers = %w(subject date from to cc
+  #                message-id in-reply-to references
+  #                x-mew-uidl x-mew-ref x-bogosity)
+  #   # content-type content-transfer-encoding
+
+  #   header_string = ""
+
+  #   required_headers.each do |rh|
+  #     headers.each do |h|
+  #       if h.name.downcase == rh
+  #         if rh == "content-type"
+  #           next unless /multipart/i =~ h.value
+  #           h.value = h.value.sub(/;.*/, '')
+  #         end
+  #         header_string += "#{h.name}: #{h.value}\n"
+  #       end
+  #     end
+  #   end
+  #   return header_string
+  # end
+
+  def dump_selective_headers_from_mail_object(mail)
+    required_headers = %w(Subject Date From To Cc
+                   X-Mew-Uidl
+                   Message-Id In-Reply-To References
+                   X-Mew-Ref X-Bogosity)
+
+    headers = ""
+    required_headers.each do |h|
+      if header = mail.header[h]
+        headers += "#{h}: #{header}\n"
+      end
+    end
+    return headers
+  end
+
+  attr_reader :builder, :config, :client, :context, :datastore
+
+  def setup_global_options
+    exit_on_error do
+      @config = Glima::Config.create_from_file(options[:config] || CONFIG_PATH)
+      @client = Glima::GmailClient.new(config.general, self).client
+      @datastore = Glima::DataStore.new(File.expand_path("~/Mail"))
+      @context = Glima::Context.new(File.expand_path(CONFIG_HOME))
+
+      if options[:profile]
+        require 'profiler'
+        Profiler__.start_profile
+      end
+      if options[:debug]
+        require "pp"
+        $GLIMA_DEBUG = true
+        $GLIMA_DEBUG_FOR_DEVELOPER = true if ENV["GLIMA_DEBUG_FOR_DEVELOPER"]
+      end
+    end
+  end
+
+end
+
+GlimaCLI.start(ARGV)
