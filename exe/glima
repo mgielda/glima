@@ -25,6 +25,7 @@ end
 require "rubygems"
 require "glima"
 require "mail"
+require "cgi"
 
 Encoding.default_external="UTF-8"
 
@@ -36,14 +37,108 @@ class GlimaCLI < Glima::Cli
 
   named_option :format,     :desc => "Set printing format", :enum => %w(short full metadata minimal raw mewl)
   named_option :dry_run,    :desc => "Perform a trial run with no changes made", :type => :boolean
-
+  named_option :query,      :desc => "Filter messages by QUERY"
 
   ################################################################
-  # Command: contacts
+  # Command: watch
   ################################################################
-  desc "contacts", "List contacts"
+  desc "watch", "Watch gmail server and report."
 
-  def contacts
+
+  def watch
+    begin
+      response = client.get_user_profile('me')
+      current_history_id = response.history_id.to_i
+      last_history_id ||= current_history_id
+
+      puts "current: #{current_history_id}"
+
+      if current_history_id > last_history_id
+        puts "current: #{current_history_id} > last: #{last_history_id}"
+
+        res = client.list_user_histories('me', {start_history_id: last_history_id})
+        puts "res.history_id: #{res.history_id}"
+
+        if res.history
+          res.history.each do |h|
+            history = Glima::Resource::History.new(h)
+            puts history.dump
+            last_history_id = h.id.to_i
+          end
+        else
+          last_history_id = res.history_id.to_i # update gap
+          shell.say("No history, update to #{last_history_id}", :red)
+        end
+      end
+
+      # sleep if current history Id is up-to-date
+      client.wait("[Gmail]/すべてのメール") if current_history_id == last_history_id
+
+    end while true
+  end
+
+  ################################################################
+  # Command: push
+  ################################################################
+  desc "push EMAIL_FILE", "Push EMAIL_FILE to INBOX"
+
+  method_option :date,   :desc => "Set date source", :enum => %w(time header)
+  method_option :thread, :desc => "Set thread Id"
+  method_option :label,  :desc => "List of label names to add separated by comma"
+
+  def push(email_file)
+    labels = options[:label]&.split(/ *, */) || []
+    label_ids = client.list_user_labels('me').labels.find_all {|lbl| labels.member?(lbl.name)}.map(&:id)
+    label_ids += ["INBOX", "UNREAD"]
+    thid = options[:thread] || nil
+    date = if options[:date] == "header" then "dateHeader" else "receivedTime" end
+
+    File.open(email_file) do |source|
+      client.insert_user_message(
+        'me',
+        Google::Apis::GmailV1::Message.new(label_ids: label_ids, thread_id: thid),
+        content_type: "message/rfc822",
+        internal_date_source: date,
+        upload_source: source) do |msg, err|
+        if msg
+          puts "pushed to: #{msg.id}"
+        else
+          STDERR.puts "Error: #{err}"
+        end
+      end
+    end
+  end
+
+  ################################################################
+  # Command: rezip
+  ################################################################
+  desc "rezip INPUT_FILE [OUTPUT_FILE]", "Create decrypted and unicode path zip file."
+
+  method_option :password,   :desc => "Password for decryption."
+  method_option :attachment, :desc => "Replace attachment of email INPUT_FILE.", :type => :boolean
+
+  def rezip(input_file, output_filename = nil)
+    if options[:attachment]
+      mail = Mail.read(input_file)
+      mail.attachments.each do |attachment|
+        if attachment.filename =~ /\.zip$/i
+          zip = Glima::Zip.new(attachment.body.decoded, options[:password])
+          attachment.body = zip.to_decrypted_unicode_zip.to_base64
+          attachment.content_transfer_encoding = "base64"
+        end
+      end
+      if output_filename
+        File.open(output_filename, "w") do |f|
+          f.write(mail.to_s)
+        end
+      else
+        print mail.to_s
+      end
+
+    else
+      zip = Glima::Zip.new(File.open(File.expand_path(input_file)).read, options[:password])
+      zip.to_decrypted_unicode_zip.write_to_file(output_filename || $stdout)
+    end
   end
 
   ################################################################
@@ -51,16 +146,16 @@ class GlimaCLI < Glima::Cli
   ################################################################
   desc "labels", "List labels"
 
-  expand_option :format
+  method_option :verbose, :desc => "Show verbose information for each label.", :type => :boolean
 
   def labels
     response = client.list_user_labels('me')
-    puts 'No files found' if response.labels.empty?
+    puts 'No labels found' if response.labels.empty?
 
     all_ids = response.labels.map(&:id)
     total = all_ids.length
 
-    if options[:format] == 'short'
+    unless options[:verbose]
       response.labels.sort_by(&:name).each do |label|
         # puts "(\"#{label.id}\" . \"#{label.name}\")"
         puts "#{label.name}"
@@ -68,15 +163,34 @@ class GlimaCLI < Glima::Cli
       return 0
     end
 
-    # Gmail API has rate limit at 250 req/sec/user (deps on type of method)
+    # Gmail API has rate limit at 250 requests/seccond/user (deps on type of method)
     # https://developers.google.com/gmail/api/v1/reference/quota
+    # labels.get consumes 1quota unit
+    # It is only an experiment, not practical...
+    #
+    # how to retry batch requests? · Issue #444 · google/google-api-ruby-client
+    # https://github.com/google/google-api-ruby-client/issues/444
+    # Setting default option should also work, but it has to be done before the service is created.
+    #
+    # Retries on individual operations within a batch isn't yet
+    # supported. It's a bit complicated to do that correctly
+    # (e.g. extract the failed requests/responses, build a new batch,
+    # retry, repeat... merge all the results...)
+    #
+    # I'd caution against using retries with batches unless you know
+    # the operations are safe to repeat. Since the entire batch is
+    # repeated, you may be replaying successful operations as part of
+    # it.
+    #
+    index = 1
     all_ids.each_slice(100) do |ids|
       client.batch do |batch_client|
-        ids.each_with_index do |id, i|
+        ids.each do |id|
           batch_client.get_user_label('me', id) do |label, err|
-            puts "--- #{i+1}/#{total} -------------------------------------------------"
             if label
-              puts Glima::Resource::Label.new(label).dump
+              puts "--- #{index}/#{total} -------------------------------------------------"
+              # puts Glima::Resource::Label.new(label).dump
+              index += 1
             else
               puts "Error: #{err}"
             end
@@ -90,7 +204,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: label
   ################################################################
-  desc "label MESSAGE_ID", "Add/Remove labels to/from MESSAGE_ID"
+  desc "label GM_MSGID", "Add/Remove labels to/from GM_MSGID"
 
   method_option :add, :desc => "List of label names to add separated by comma"
   method_option :remove, :desc => "List of label names to remove separated by comma"
@@ -125,7 +239,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: trash
   ################################################################
-  desc "trash MESSAGE_ID...", "Move messages to trash"
+  desc "trash GM_MSGID ...", "Move messages to trash"
 
   def trash(*message_ids)
     if message_ids.empty?
@@ -133,17 +247,18 @@ class GlimaCLI < Glima::Cli
       return 0
     end
 
-    message_ids.each do |id|
-      client.trash_user_message('me', id, req) do |res,err|
-        if res
-          puts "Update #{message_id} successfully."
-        else
-          puts "Error: #{err}"
+    client.batch do |batch_client|
+      message_ids.each do |id|
+        batch_client.trash_user_message('me', id) do |res, err|
+          if res
+            puts "Trash #{id} successfully."
+          else
+            puts "Error: #{err}"
+          end
         end
       end
     end
   end
-
 
   ################################################################
   # Command: profile
@@ -151,11 +266,15 @@ class GlimaCLI < Glima::Cli
   desc "profile", "Show user's profile."
 
   def profile
-    response = client.get_user_profile('me')
-    puts "emailAddress: #{response.email_address}"
-    puts "messagesTotal: #{response.messages_total}"
-    puts "threadsTotal: #{response.threads_total}"
-    puts "historyId: #{response.history_id}"
+    # while true
+      response = client.get_user_profile('me')
+      puts "emailAddress: #{response.email_address}"
+      puts "messagesTotal: #{response.messages_total}"
+      puts "threadsTotal: #{response.threads_total}"
+      puts "historyId: #{response.history_id}"
+    #   STDOUT.flush
+    #   _dummy = STDIN.gets
+    # end
   end
 
   ################################################################
@@ -182,7 +301,6 @@ class GlimaCLI < Glima::Cli
 
       puts "nextPageToken: #{next_page_token}"
       plus = next_page_token ? "+" : ""
-      puts "historyId: #{response.history_id}"
 
       unless response.history
         puts "No records since #{last_history_id}."
@@ -190,38 +308,68 @@ class GlimaCLI < Glima::Cli
       end
 
       puts "#{response.history.length}#{plus} historie(s):"
+
       response.history.each do |h|
-        puts "---------------------------"
-        puts "  id: #{h.id}"
-
-        puts "* Messages:"
-        h.messages.each do |m|
-          puts dump_message(m, 2)
-        end
-
-        puts "* MessagesAdded:"
-        h.messages_added.map(&:message).each do |m|
-          puts dump_message(m, 2)
-        end if h.messages_added
-
-        puts "* MessagesDeleted:"
-        h.messages_deleted.map(&:message).each do |m|
-          puts dump_message(m, 2)
-        end if h.messages_deleted
-
-        puts "* LabelsAdded:"
-        h.labels_added.each do |lm|
-          puts dump_message(lm.message, 2)
-          puts "  label_ids: " + lm.label_ids.join(',')
-        end if h.labels_added
-
-        puts "* LabelsRemoved:"
-        h.labels_removed.each do |lm|
-          puts dump_message(lm.message, 2)
-          puts "  label_ids: " + lm.label_ids.join(',')
-        end if h.labels_removed
+        history = Glima::Resource::History.new(h)
+        puts history.dump
       end
     end while next_page_token
+  end
+
+  ################################################################
+  # Command: dezip
+  ################################################################
+  desc "dezip GM_MSGID DIRECTORY", "Decrypt zip found in GM_MSGID to DIRECTORY"
+
+  def dezip(pivot_id, directory)
+    fmt = if datastore.exist?(pivot_id) then "minimal" else "raw" end
+    pivot_mail = nil
+
+    client.get_user_message('me', pivot_id, format: fmt) do |m, err|
+      fail "#{err}" if err
+      pivot_message = datastore.update(m)
+      pivot_mail = Mail.read_from_string(pivot_message.raw)
+    end
+
+    # find password candidate from emails
+    password_candidates = [nil]
+    index = 1
+    find_passwordish_mails(pivot_mail) do |message|
+      next if message.id == pivot_id
+      puts format_message(index, message)
+      message = datastore.update(message)
+      mail = Mail.read_from_string(message.raw)
+
+      password_candidates += find_passwordish_strings_from_mail(mail)
+      index += 1
+    end
+
+    password_candidates.uniq!
+
+    # try all passwords to attachment
+    pivot_mail.attachments.each do |attachment|
+      if attachment.filename =~ /\.zip$/i
+        zip_filename = File.expand_path(attachment.filename, directory)
+
+        zip = Glima::Zip.new(attachment.body.decoded)
+
+        # try all passwords
+        password_candidates.each do |password|
+          STDERR.print "Try password:'#{password}'..."
+          if zip.correct_password?(password)
+            STDERR.puts "succeeded."
+            zip.password = password
+            STDERR.print "Writing to #{zip_filename || 'STDOUT'}..."
+            zip.to_decrypted_unicode_zip.write_to_file(zip_filename)
+            STDERR.puts "done."
+            break
+          else
+            STDERR.puts "failed."
+          end
+        end
+
+      end
+    end
   end
 
   ################################################################
@@ -238,145 +386,55 @@ class GlimaCLI < Glima::Cli
   end
 
   ################################################################
-  # Command: mewl
-  ################################################################
-  desc "mewl +FOLDER [RANGE]", "Scan mails in FOLDER in mewl format."
-
-  def mewl(folder, range = nil)
-    scan_batch(folder, range) do |message|
-      puts format_message_mewl(message)
-      STDOUT.flush
-      _dummy = STDIN.gets
-    end
-  end
-
-  ################################################################
-  # Command: mewl
-  ################################################################
-  desc "mewl_orig +FOLDER SEARCH_STRING", "Scan mails in FOLDER in mewl format."
-
-  expand_option :format
-
-  # mewl -l 5 -c 10  -f Subject:,Date:,From:,To:,Cc:,Content-Type:,Content-Transfer-Encoding:,X-Mew-Uidl:,Message-Id:,In-Reply-To:,References:,X-Mew-Ref:,X-Bogosity:,Body
-  # +inbox
-  def mewl_orig(folder, search_string = nil)
-    # full:     Returns the full email message data with body content parsed in the payload field; the raw field is not used. (default)
-    # metadata: Returns only email message ID, labels, and email headers.
-    # minimal:  Returns only email message ID and labels; does not return the email headers, body, or payload.
-    # raw:      Returns the full email message data with body content in the raw field as a base64url encoded string; the payload field is not used.
-    format = options[:format] || "metadata"
-    unless %w(short full metadata minimal raw mewl).member?(format)
-      STDERR.puts "Unknown format: #{format}."
-      return 1
-    end
-
-    mewl = false
-    if format == "mewl"
-      format = "metadata"
-      mewl = true
-    end
-
-    if /^\+(\S+)/ =~ folder
-      opt = {q: "in:\"#{$1}\""}
-      folder = "+#{$1}"
-    else
-      STDERR.puts "Unknown folder format: #{folder}."
-      return 1
-    end
-
-    if search_string == 'next'
-      opt[:page_token] = File.open(config.general.context_store).read
-    else
-      opt[:q] += (search_string ? " #{search_string}" : "")
-    end
-
-    # puts "Folder: #{folder} q:#{q}"
-    client = Glima::GmailClient.new(config.general, self).client
-
-    # id: 152119f4ae69e1ef
-    # threadId: 152119f4ae69e1ef
-    response = client.list_user_messages('me', opt)
-    messages = response.messages
-    puts "GOT #{response.messages.length}/#{response.result_size_estimate}" if $DEBUG
-
-    if page_token = response.next_page_token
-      File.open(config.general.context_store, "w") do |f|
-        f.write page_token
-      end
-    end
-
-    total = response.result_size_estimate
-    puts "Total #{total} message(s)"  if $DEBUG
-    if messages.to_a.empty?
-      puts 'No messages found' if $DEBUG
-      return 0
-    end
-
-
-    # while page_token
-    #   response = client.list_user_messages('me', q: q, page_token: page_token)
-    #   puts "GOT #{response.messages.length}/#{response.result_size_estimate}" if $DEBUG
-    #   messages += response.messages
-    #   page_token = response.next_page_token
-    # end
-
-    count = 0
-
-    if format == 'short'
-      # id: 152119f4ae69e1ef
-      # threadId: 152119f4ae69e1ef
-      messages.each do |m|
-        count += 1
-        puts "--- #{count}/#{total} ----------------------------------------------"
-        puts dump_message(m).strip_heredoc
-      end
-      return 0
-    end
-
-    ids = messages.map(&:id)
-    total = ids.length
-
-    puts "NumOfMsg: #{total}" if mewl
-
-    client.batch do |batch_client|
-      ids.each do |id|
-        if File.exist?(folder_message_to_path("+all", id))
-          fmt = "minimal"
-        else
-          fmt = "raw"
-        end
-
-        batch_client.get_user_message('me', id, format: fmt) do |m, err|
-          count += 1
-          puts "--- #{count}/#{total} ----------------------------------------------" unless mewl
-          if m
-            if fmt == "raw"
-              save_message_in_id(m, "+all")
-            end
-            if mewl
-              mail = Mail.read(folder_message_to_path("+all", id))
-              mewl_message(folder, mail, m)
-              STDOUT.flush
-              _dummy = STDIN.gets
-            else
-              puts dump_message(m).strip_heredoc
-            end
-          else
-            puts "X-Error: #{err}"
-          end
-        end
-      end
-    end
-  end
-
-  ################################################################
   # Command: show
   ################################################################
-  desc "show MESSAGE_ID", "Show article by MESSAGE_ID"
+  desc "show GM_MSGID", "Show article by GM_MSGID."
+
+  method_option :raw, :desc => "Cat raw mail article.", :type => :boolean
 
   def show(id)
     batch_on_messages([id]) do |message|
-      puts message.raw
+      if options[:raw]
+        print message.raw
+      else
+        print convert_mail_text_to_utf8(Mail.read_from_string(message.raw))
+      end
+    end
+  end
+
+  ################################################################
+  # Command: open
+  ################################################################
+  desc "open GM_MSGID", "Open article in browser by GM_MSGID"
+
+  def open(id)
+    Launchy.open("https://mail.google.com/mail/u/1/#all/#{id}")
+  end
+
+  ################################################################
+  # Command: guess
+  ################################################################
+  desc "guess GM_MSGID", "Guess labels to add to GM_MSGID"
+
+  def guess(message_id)
+    fmt = "minimal"
+    user_label_ids = []
+
+    msg = client.get_user_message('me', message_id, format: fmt)
+    thr = client.get_user_thread('me', msg.thread_id, format: fmt)
+
+    thr.messages.each do |tmsg|
+      # puts tmsg.snippet
+      tmsg.label_ids.each do |label_id|
+        next unless label_id =~ /^Label_\d+$/
+        user_label_ids << label_id unless user_label_ids.member?(label_id)
+        puts "#{tmsg.id} -> #{label_id}"
+      end
+    end
+
+    user_label_ids.each do |label_id|
+      label = client.get_user_label('me', label_id)
+      puts "#{label_id} -> #{label.name}"
     end
   end
 
@@ -471,7 +529,7 @@ class GlimaCLI < Glima::Cli
 
       ids = []
       response.messages.map(&:id).each do |id|
-        next if File.exist?(folder_message_to_path("+all", id))
+        next if datastore.exist?(id)
         ids << id
       end
 
@@ -483,8 +541,10 @@ class GlimaCLI < Glima::Cli
             count += 1
             if m
               # id = save_message_in_num(m, "+all")
-              id = save_message_in_id(m, "+all")
-              puts "#{count} #{id} #{m.snippet[0..40]}..."
+              # id = save_message_in_id(m, "+all")
+              message = datastore.update(m)
+              puts format_message(count, message)
+              # puts "#{count} #{id} #{m.snippet[0..40]}..."
             else
               STDERR.puts "Error: #{err}"
             end
@@ -498,6 +558,107 @@ class GlimaCLI < Glima::Cli
   # private
 
   private
+
+  def find_passwordish_strings_from_mail(mail)
+    body = convert_mail_text_to_utf8(mail)
+
+    password_candidates = []
+
+    # gather passwordish ASCII strings.
+    body.scan(/(?:^|[^!-~])([!-~]{4,16})[^!-~]/) do |str|
+      password_candidates += str
+    end
+    return password_candidates
+  end
+
+  def find_passwordish_mails(pivot_mail)
+    from  = "from:#{pivot_mail.from}"
+    date1 = (pivot_mail.date.to_date - 1).strftime("after:%Y/%m/%d")
+    date2 = (pivot_mail.date.to_date + 1).strftime("before:%Y/%m/%d")
+    query = "#{from} #{date1} #{date2}"
+    scan_batch("+all", query) do |message|
+      yield message
+    end
+  end
+
+  def convert_mail_text_to_utf8(mail)
+    parts = if mail.multipart?
+              mail.parts
+            else
+              [mail]
+            end
+
+    body = parts.map do |part|
+      if part.content_type =~ /text\/plain/
+        charset = part.content_type_parameters["charset"]
+        convert_to_utf8(part.body.decoded.to_s, charset)
+      else
+        "NOT_TEXT_PART (#{part.content_type})\n"
+      end
+    end.join("-- PART ---- PART ---- PART ---- PART ---- PART ---- PART ---- PART --\n")
+
+    return pretty_mail_hearder(mail) + "\n" + body
+  end
+
+  def pretty_mail_hearder(mail)
+    ["Subject: #{mail.subject}",
+     "From: #{mail.header['from']&.decoded}",
+     "Date: #{mail.header['date']}",
+     "Message-Id: #{mail.header['message_id']}",
+     "To: #{mail.header['to']&.decoded}",
+     "Cc: #{mail.header['cc']&.decoded}"
+    ].join("\n") + "\n"
+  end
+
+
+  def convert_to_utf8(string, from_charset = nil)
+    if from_charset && from_charset != "utf-8"
+      string.encode("utf-8", from_charset,
+                    :invalid => :replace, :undef => :replace)
+    else
+      string.force_encoding("utf-8")
+    end
+  end
+
+  def push_mail_to_server(mail)
+    labels = options[:label]&.split(/ *, */) || []
+    label_ids = client.list_user_labels('me').labels.find_all {|lbl| labels.member?(lbl.name)}.map(&:id)
+    label_ids += ["INBOX", "UNREAD"]
+    thid = options[:thread] || nil
+    date = if options[:date] == "header" then "dateHeader" else "receivedTime" end
+
+    File.open(email_file) do |source|
+      client.insert_user_message(
+        'me',
+        Google::Apis::GmailV1::Message.new(label_ids: label_ids, thread_id: thid),
+        content_type: "message/rfc822",
+        internal_date_source: date,
+        upload_source: source) do |msg, err|
+        if msg
+          puts "pushed to: #{msg.id}"
+        else
+          STDERR.puts "Error: #{err}"
+        end
+      end
+    end
+  end
+
+  def batch_on_query(query, &block)
+    ids = pick_ids_by_query(query)
+
+    client.batch do |batch_client|
+      ids.each do |id|
+        yield batch_client, id
+      end
+    end
+  end
+
+  def pick_ids_by_query(query)
+    client.list_user_messages('me', {:q => query}) do |res, error|
+      fail "#{error}" if error
+      return res.messages.map(&:id)
+    end
+  end
 
   def scan_batch(folder, search_or_range = nil, &block)
     qp = Glima::QueryParameter.new(folder, search_or_range, context)
@@ -515,44 +676,9 @@ class GlimaCLI < Glima::Cli
 
   def format_message(count, message)
     date = Time.at(message.internal_date.to_i/1000).strftime("%m/%d %H:%M")
-    return "#{"%4d" % count} #{date} #{message.id} #{message.snippet[0..30]}"
+    return "#{"%4d" % count} #{date} #{message.id} #{CGI.unescapeHTML(message.snippet)[0..30]}"
   end
 
-  def format_message_mewl(message)
-    mail = Mail.read_from_string(message.raw)
-
-    required_headers =
-      %w(Subject Date From To Cc
-         X-Mew-Uidl
-         Message-Id In-Reply-To References
-         X-Mew-Ref X-Bogosity)
-
-    required_headers << "Content-Type" if mail.multipart?
-
-    result = "Folder: +all\n" +
-             "Filename: #{message.id}.eml\n" +
-             "Labels: #{message.label_ids.join(',')}\n"
-
-    required_headers.each do |h|
-      if header = mail.header[h]
-        result += "#{h}: #{header}\n"
-      end
-    end
-
-    result += "\n"
-
-    if mail.multipart?
-      result  += "--#{mail.content_type_parameters["boundary"]}\n" +
-                 "Content-Type: text/plain; charset=\"UTF-8\"\n" +
-                 "Content-Transfer-Encoding: 8bit\n\n"
-    end
-
-    snippet = CGI.unescapeHTML(message.snippet)
-    result += "." if /^\./ =~ snippet
-    result += "#{snippet}\n.\n"
-
-    return result
-  end
 
   def store_page_token(page_token)
     context.save_page_token(page_token)
@@ -572,82 +698,12 @@ class GlimaCLI < Glima::Cli
     end
   end
 
-  require "cgi"
-  # mewl -l 5 -c 5
-  # -f Subject:,Date:,From:,To:,Cc:,Content-Type:,Content-Transfer-Encoding:,X-Mew-Uidl:,Message-Id:,In-Reply-To:,References:,
-  #             X-Mew-Ref:,X-Bogosity:,Body +inbox| les
-  def mewl_message(folder, mail, metadata)
-    # puts "Folder: #{folder}"
-    puts "Folder: +all"
-    puts "Filename: #{metadata.id}.eml"
-    puts "Labels: #{metadata.label_ids.join(',')}" ##xxx
-    # if metadata.raw
-      # puts "#{dump_selective_headers_from_string(metadata.raw)}"
-      puts "#{dump_selective_headers_from_mail_object(mail)}"
-    # else
-    #  puts "#{dump_selective_headers(metadata.payload.headers)}"
-    # end
-
-    if mail.multipart?
-      puts "Content-Type: #{mail.content_type}"
-    end
-    print "\n"
-
-    if mail.multipart?
-      puts "--#{mail.content_type_parameters["boundary"]}"
-      puts 'Content-Type: text/plain; charset="UTF-8"'
-      puts "Content-Transfer-Encoding: 8bit"
-      print "\n"
-    end
-
-    print "." if /^\./ =~ metadata.snippet
-    puts "#{CGI.unescapeHTML(metadata.snippet)}"
-    puts "."
-  end
-
-  # def dump_selective_headers(headers)
-  #   required_headers = %w(subject date from to cc
-  #                message-id in-reply-to references
-  #                x-mew-uidl x-mew-ref x-bogosity)
-  #   # content-type content-transfer-encoding
-
-  #   header_string = ""
-
-  #   required_headers.each do |rh|
-  #     headers.each do |h|
-  #       if h.name.downcase == rh
-  #         if rh == "content-type"
-  #           next unless /multipart/i =~ h.value
-  #           h.value = h.value.sub(/;.*/, '')
-  #         end
-  #         header_string += "#{h.name}: #{h.value}\n"
-  #       end
-  #     end
-  #   end
-  #   return header_string
-  # end
-
-  def dump_selective_headers_from_mail_object(mail)
-    required_headers = %w(Subject Date From To Cc
-                   X-Mew-Uidl
-                   Message-Id In-Reply-To References
-                   X-Mew-Ref X-Bogosity)
-
-    headers = ""
-    required_headers.each do |h|
-      if header = mail.header[h]
-        headers += "#{h}: #{header}\n"
-      end
-    end
-    return headers
-  end
-
   attr_reader :builder, :config, :client, :context, :datastore
 
   def setup_global_options
     exit_on_error do
       @config = Glima::Config.create_from_file(options[:config] || CONFIG_PATH)
-      @client = Glima::GmailClient.new(config.general, self).client
+      @client = Glima::GmailClient.new(config.general, self)#.client
       @datastore = Glima::DataStore.new(File.expand_path("~/Mail"))
       @context = Glima::Context.new(File.expand_path(CONFIG_HOME))
 
@@ -662,7 +718,6 @@ class GlimaCLI < Glima::Cli
       end
     end
   end
-
 end
 
 GlimaCLI.start(ARGV)

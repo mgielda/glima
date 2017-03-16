@@ -2,66 +2,89 @@ require 'google/apis/gmail_v1'
 require 'googleauth'
 require 'googleauth/stores/file_token_store'
 require 'launchy'
+require 'forwardable'
 
 # Retry if rate-limit.
 Google::Apis::RequestOptions.default.retries = 5
 
 module Glima
-  # See: https://developers.google.com/google-apps/calendar/v3/reference/?hl=ja
-
-  class GmailClient
-    # see
-    # https://github.com/google/google-api-ruby-client#example-usage
-    # http://stackoverflow.com/questions/12572723/rails-google-client-api-unable-to-exchange-a-refresh-token-for-access-token
-
-    attr_reader :client
-    OOB_URI = 'urn:ietf:wg:oauth:2.0:oob'
-
-    def initialize(config, shell)
-      user_id = config.default_user
-      # scope = Google::Apis::GmailV1::AUTH_GMAIL_LABELS
-      scope = Google::Apis::GmailV1::AUTH_SCOPE
-
-      client_id = Google::Auth::ClientId.new(
-        config.client_id,
-        config.client_secret
+  class Authorizer
+    def initialize(client_id, client_secret, scope, token_store_path)
+      @authorizer = Google::Auth::UserAuthorizer.new(
+        Google::Auth::ClientId.new(client_id, client_secret),
+        scope,
+        Google::Auth::Stores::FileTokenStore.new(file: token_store_path)
       )
-      token_store = Google::Auth::Stores::FileTokenStore.new(
-        :file => config.token_store
-      )
-      authorizer = Google::Auth::UserAuthorizer.new(client_id, scope, token_store)
-      credentials = authorizer.get_credentials(user_id)
+    end
 
-      if credentials.nil?
-        url = authorizer.get_authorization_url(base_url: OOB_URI)
+    def credentials(user_id = "default")
+      @authorizer.get_credentials(user_id)
+    end
 
-        begin
-          Launchy.open(url)
-        rescue
-          puts "Open URL in your browser:\n  #{url}"
-        end
-        code = shell.ask "Enter the resulting code:"
-        credentials = authorizer.get_and_store_credentials_from_code(
-          user_id: user_id, code: code, base_url: OOB_URI
-        )
+    def auth_interactively(user_id = "default", shell = Thor.new.shell)
+      oob_uri = "urn:ietf:wg:oauth:2.0:oob"
+
+      url = @authorizer.get_authorization_url(base_url: oob_uri)
+      begin
+        Launchy.open(url)
+      rescue
+        puts "Open URL in your browser:\n #{url}"
       end
 
-      @client =  Google::Apis::GmailV1::GmailService.new
+      code = shell.ask "Enter the resulting code:"
+
+      @authorizer.get_and_store_credentials_from_code(
+        user_id:  user_id,
+        code:     code,
+        base_url: oob_uri
+      )
+    end
+  end # Authorizer
+
+  class GmailClient
+    extend Forwardable
+
+    def_delegators :@client,
+    :authorization,
+    :batch,
+    :get_user_label,
+    :get_user_message,
+    :get_user_profile,
+    :get_user_thread,
+    :insert_user_message,
+    :list_user_histories,
+    :list_user_labels,
+    :list_user_messages,
+    :modify_message,
+    :patch_user_label,
+    :trash_user_message
+
+    def online?
+      Socket.getifaddrs.select {|i|
+        i.addr.ipv4? and ! i.addr.ipv4_loopback?
+      }.map(&:addr).map(&:ip_address).length > 0
+    end
+
+    def initialize(config, shell)
+      authorizer = Authorizer.new(config.client_id,
+                                  config.client_secret,
+                                  Google::Apis::GmailV1::AUTH_SCOPE,
+                                  config.token_store)
+
+      credentials = authorizer.credentials(config.default_user) ||
+                    authorizer.auth_interactively(config.default_user, shell)
+
+      @client = Google::Apis::GmailV1::GmailService.new
       @client.client_options.application_name = 'glima'
       @client.authorization = credentials
+      @client.authorization.username = config.default_user # for IMAP
       return @client
     end
 
-    private
-
-    def initialize_token(config)
-      flow = Google::APIClient::InstalledAppFlow.new(
-        client_id: config.client_id,
-        client_secret: config.client_secret,
-        scope: "https://www.googleapis.com/auth/calendar"
-      )
-      flow.authorize
+    # "[Gmail]/すべてのメール"
+    def wait(label = "INBOX")
+      @imap ||= Glima::ImapWatch.new("imap.gmail.com", @client.authorization)
+      @imap.wait(label)
     end
-
-  end # class Calendar
+  end # class GmailClient
 end # module Glima

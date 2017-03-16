@@ -25,10 +25,11 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_runtime_dependency "thor", ">= 0.19.1"
-  spec.add_runtime_dependency "google-api-client", "0.9.pre4"
+  spec.add_runtime_dependency "google-api-client", ">0.9"
   spec.add_runtime_dependency "googleauth"
   spec.add_runtime_dependency "launchy"
   spec.add_runtime_dependency "mail"
+  spec.add_runtime_dependency "rubyzip"
 
   spec.add_development_dependency "bundler", "~> 1.11"
   spec.add_development_dependency "rake", "~> 10.0"

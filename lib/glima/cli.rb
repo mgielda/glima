@@ -92,16 +92,6 @@ module Glima
     end
 
     ################################################################
-    # Command: config
-    ################################################################
-    desc "configuration", "Show current configuration in various formats."
-
-
-    def configuration(name = nil)
-      puts Glima::Converter::Emacs.new.to_emacs(config.get_value(name))
-    end
-
-    ################################################################
     # add some hooks to Thor
 
     no_commands do
