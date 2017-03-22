@@ -45,19 +45,31 @@ module Glima
     extend Forwardable
 
     def_delegators :@client,
-    :authorization,
-    :batch,
-    :get_user_label,
-    :get_user_message,
-    :get_user_profile,
-    :get_user_thread,
-    :insert_user_message,
+    # Users.histoy
     :list_user_histories,
+
+    # Users.labels
     :list_user_labels,
+    :get_user_label,
+    :patch_user_label,
+
+    # Users.messages
+    :get_user_message,
+    :insert_user_message,
     :list_user_messages,
     :modify_message,
-    :patch_user_label,
-    :trash_user_message
+    :trash_user_message,
+
+    # Users.threads
+    :get_user_thread,
+
+    # Users getProfile
+    :get_user_profile,
+
+    # Non-resources
+    :authorization,
+    :batch
+
 
     def online?
       Socket.getifaddrs.select {|i|
