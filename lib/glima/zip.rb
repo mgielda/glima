@@ -16,17 +16,20 @@ module Glima
 
     def correct_password?(password)
       with_input_stream(password) do |zip|
-        return false unless entry = zip.get_next_entry
-
         begin
-          size = zip.read.size # Exception if invalid password
+          # Looking the first entry is not enough, because
+          # some zip files have directory entry which size is zero
+          # and no error is emitted even with wrong password.
+          while entry = zip.get_next_entry
+            size = zip.read.size # Exception if invalid password
+            return true if size > 0 && size == entry.size
+          end
         rescue Zlib::DataError => e
           puts "*** #{e} ***" if $DEBUG
           return false
         end
 
-        # no Exception emitted, but size is invalid.
-        return (size == entry.size)
+        return true # All files are emtpy?
       end
     end
 
