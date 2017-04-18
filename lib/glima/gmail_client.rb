@@ -77,14 +77,14 @@ module Glima
       }.map(&:addr).map(&:ip_address).length > 0
     end
 
-    def initialize(config, shell)
+    def initialize(config)
       authorizer = Authorizer.new(config.client_id,
                                   config.client_secret,
                                   Google::Apis::GmailV1::AUTH_SCOPE,
                                   config.token_store)
 
       credentials = authorizer.credentials(config.default_user) ||
-                    authorizer.auth_interactively(config.default_user, shell)
+                    authorizer.auth_interactively(config.default_user)
 
       @client = Google::Apis::GmailV1::GmailService.new
       @client.client_options.application_name = 'glima'

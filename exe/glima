@@ -652,7 +652,7 @@ class GlimaCLI < Glima::Cli
   def setup_global_options
     exit_on_error do
       @config = Glima::Config.create_from_file(options[:config] || CONFIG_PATH)
-      @client = Glima::GmailClient.new(config.general, self)#.client
+      @client = Glima::GmailClient.new(config.general)
       @datastore = Glima::DataStore.new(File.expand_path("~/Mail"))
       @context = Glima::Context.new(File.expand_path(CONFIG_HOME))
 
