@@ -24,7 +24,6 @@ end
 
 require "rubygems"
 require "glima"
-require "mail"
 require "cgi"
 
 Encoding.default_external="UTF-8"
@@ -119,7 +118,7 @@ class GlimaCLI < Glima::Cli
 
   def rezip(input_file, output_filename = nil)
     if options[:attachment]
-      mail = Mail.read(input_file)
+      mail = Glima::Resource::Mail.new(File.open(input_file, 'rb') { |f| f.read })
       mail.attachments.each do |attachment|
         if attachment.filename =~ /\.zip$/i
           zip = Glima::Zip.new(attachment.body.decoded, options[:password])
@@ -328,7 +327,7 @@ class GlimaCLI < Glima::Cli
     client.get_user_message('me', pivot_id, format: fmt) do |m, err|
       fail "#{err}" if err
       pivot_message = datastore.update(m)
-      pivot_mail = Mail.read_from_string(pivot_message.raw)
+      pivot_mail = Glima::Resource::Mail.new(pivot_message.raw)
     end
 
     # find password candidate from emails
@@ -338,9 +337,9 @@ class GlimaCLI < Glima::Cli
       next if message.id == pivot_id
       puts format_message(index, message)
       message = datastore.update(message)
-      mail = Mail.read_from_string(message.raw)
+      mail = Glima::Resource::Mail.new(message.raw)
 
-      password_candidates += find_passwordish_strings_from_mail(mail)
+      password_candidates += mail.find_passwordish_strings
       index += 1
     end
 
@@ -397,7 +396,7 @@ class GlimaCLI < Glima::Cli
       if options[:raw]
         print message.raw
       else
-        print convert_mail_text_to_utf8(Mail.read_from_string(message.raw))
+        print Glima::Resource::Mail.new(message.raw).to_plain_text
       end
     end
   end
@@ -559,18 +558,6 @@ class GlimaCLI < Glima::Cli
 
   private
 
-  def find_passwordish_strings_from_mail(mail)
-    body = convert_mail_text_to_utf8(mail)
-
-    password_candidates = []
-
-    # gather passwordish ASCII strings.
-    body.scan(/(?:^|[^!-~])([!-~]{4,16})[^!-~]/) do |str|
-      password_candidates += str
-    end
-    return password_candidates
-  end
-
   def find_passwordish_mails(pivot_mail)
     from  = "from:#{pivot_mail.from}"
     date1 = (pivot_mail.date.to_date - 1).strftime("after:%Y/%m/%d")
@@ -581,44 +568,6 @@ class GlimaCLI < Glima::Cli
     end
   end
 
-  def convert_mail_text_to_utf8(mail)
-    parts = if mail.multipart?
-              mail.parts
-            else
-              [mail]
-            end
-
-    body = parts.map do |part|
-      if part.content_type =~ /text\/plain/
-        charset = part.content_type_parameters["charset"]
-        convert_to_utf8(part.body.decoded.to_s, charset)
-      else
-        "NOT_TEXT_PART (#{part.content_type})\n"
-      end
-    end.join("-- PART ---- PART ---- PART ---- PART ---- PART ---- PART ---- PART --\n")
-
-    return pretty_mail_hearder(mail) + "\n" + body
-  end
-
-  def pretty_mail_hearder(mail)
-    ["Subject: #{mail.subject}",
-     "From: #{mail.header['from']&.decoded}",
-     "Date: #{mail.header['date']}",
-     "Message-Id: #{mail.header['message_id']}",
-     "To: #{mail.header['to']&.decoded}",
-     "Cc: #{mail.header['cc']&.decoded}"
-    ].join("\n") + "\n"
-  end
-
-
-  def convert_to_utf8(string, from_charset = nil)
-    if from_charset && from_charset != "utf-8"
-      string.encode("utf-8", from_charset,
-                    :invalid => :replace, :undef => :replace)
-    else
-      string.force_encoding("utf-8")
-    end
-  end
 
   def push_mail_to_server(mail)
     labels = options[:label]&.split(/ *, */) || []

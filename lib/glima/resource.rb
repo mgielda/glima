@@ -23,6 +23,7 @@ module Glima
 
     autoload :History,             "#{dir}/history.rb"
     autoload :Label,               "#{dir}/label.rb"
+    autoload :Mail,                "#{dir}/mail.rb"
     autoload :Message,             "#{dir}/message.rb"
     autoload :Thread,              "#{dir}/thread.rb"
     autoload :User,                "#{dir}/user.rb"
