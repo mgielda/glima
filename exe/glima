@@ -325,7 +325,7 @@ class GlimaCLI < Glima::Cli
 
     client.get_user_smart_message(pivot_id) do |m, err|
       fail "#{err}" if err
-      pivot_mail = Glima::Resource::Mail.new(m)
+      pivot_mail = m
     end
 
     # find password candidate from emails
@@ -391,11 +391,11 @@ class GlimaCLI < Glima::Cli
   method_option :raw, :desc => "Cat raw mail article.", :type => :boolean
 
   def show(id)
-    client.batch_on_messages([id]) do |message|
+    client.get_user_smart_message(id) do |message|
       if options[:raw]
         print message.raw
       else
-        print Glima::Resource::Mail.new(message).to_plain_text
+        print message.to_plain_text
       end
     end
   end
