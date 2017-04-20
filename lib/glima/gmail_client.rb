@@ -71,7 +71,7 @@ module Glima
     :batch
 
 
-    # Fine nearby messages from pivot_message
+    # Find nearby messages from pivot_message
     # `Nearby' message:
     #   + has same From: address
     #   + has near Date: field (+-1day)
