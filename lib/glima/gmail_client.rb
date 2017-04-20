@@ -67,7 +67,6 @@ module Glima
     :get_user_profile,
 
     # Non-resources
-    :authorization,
     :batch
 
 

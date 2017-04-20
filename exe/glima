@@ -580,23 +580,6 @@ class GlimaCLI < Glima::Cli
     end
   end
 
-  def batch_on_query(query, &block)
-    ids = pick_ids_by_query(query)
-
-    client.batch do |batch_client|
-      ids.each do |id|
-        yield batch_client, id
-      end
-    end
-  end
-
-  def pick_ids_by_query(query)
-    client.list_user_messages('me', {:q => query}) do |res, error|
-      fail "#{error}" if error
-      return res.messages.map(&:id)
-    end
-  end
-
   def format_message(count, message)
     date = Time.at(message.internal_date.to_i/1000).strftime("%m/%d %H:%M")
     return "#{"%4d" % count} #{date} #{message.id} #{CGI.unescapeHTML(message.snippet)[0..30]}"
