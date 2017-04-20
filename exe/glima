@@ -325,7 +325,7 @@ class GlimaCLI < Glima::Cli
 
     client.get_user_smart_message(pivot_id) do |m, err|
       fail "#{err}" if err
-      pivot_mail = Glima::Resource::Mail.new(m.raw)
+      pivot_mail = Glima::Resource::Mail.new(m)
     end
 
     # find password candidate from emails
@@ -336,7 +336,7 @@ class GlimaCLI < Glima::Cli
       next if message.id == pivot_id
       puts format_message(index, message)
       message = datastore.update(message)
-      mail = Glima::Resource::Mail.new(message.raw)
+      mail = Glima::Resource::Mail.new(message)
 
       password_candidates += mail.find_passwordish_strings
       index += 1
@@ -395,7 +395,7 @@ class GlimaCLI < Glima::Cli
       if options[:raw]
         print message.raw
       else
-        print Glima::Resource::Mail.new(message.raw).to_plain_text
+        print Glima::Resource::Mail.new(message).to_plain_text
       end
     end
   end

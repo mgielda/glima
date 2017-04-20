@@ -4,6 +4,23 @@ module Glima
   module Resource
     class Mail < ::Mail::Message
 
+      def initialize(message)
+        @gmail_message = message
+        super(message.raw)
+      end
+
+      def gm_msgid
+        @gmail_message.id
+      end
+
+      def gm_thrid
+        @gmail_message.thread_id
+      end
+
+      def raw
+        @gmail_message.raw
+      end
+
       def to_plain_text
         mail = self
         parts = if mail.multipart? then mail.parts else [mail] end
