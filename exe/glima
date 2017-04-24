@@ -375,10 +375,12 @@ class GlimaCLI < Glima::Cli
   ################################################################
   desc "scan +FOLDER SEARCH_OR_RANGE", "Scan mails in FOLDER with SEARCH_OR_RANGE."
 
+  method_option :mew, :desc => "Make Mew virtual-summary buffer", :type => :boolean
+
   def scan(folder, search_or_range = nil)
     index = 1
     client.scan_batch(folder, search_or_range) do |message|
-      puts format_message(index, message)
+      puts format_message(index, message, options[:mew])
       index += 1
     end
   end
@@ -580,11 +582,32 @@ class GlimaCLI < Glima::Cli
     end
   end
 
-  def format_message(count, message)
+  def format_message(count, message, add_mew_link = false)
+    return format_message_mew_virtual(count, message) if add_mew_link
+
     date = Time.at(message.internal_date.to_i/1000).strftime("%m/%d %H:%M")
     return "#{"%4d" % count} #{date} #{message.id} #{CGI.unescapeHTML(message.snippet)[0..30]}"
   end
 
+  def format_message_mew_virtual(count, message)
+    date = Time.at(message.internal_date.to_i/1000).strftime("%m/%d ")
+    mail = Glima::Resource::Mail.new(message)
+
+    mark1 = " "
+    mark1 = "U" if message.label_ids.include?("UNREAD")
+
+    mark2 = " "
+    mark2 = "-" if mail.content_type =~ /multipart\/alternative/
+    mark2 = "M" unless mail.attachments.empty?
+
+    folder = File.expand_path("~/Mail/all") # XXX
+
+    summary = "#{mark1}#{mark2}#{date} #{CGI.unescapeHTML(message.snippet)}"
+    summary += "\r +#{folder} #{message.id} <#{message.id}>"
+    summary += if message.id != message.thread_id then " <#{message.thread_id}>" else " " end
+
+    return summary + " 1 2"
+  end
 
   def store_page_token(page_token)
     context.save_page_token(page_token)
