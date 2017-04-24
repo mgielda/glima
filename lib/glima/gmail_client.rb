@@ -153,11 +153,13 @@ module Glima
       qp = Glima::QueryParameter.new(folder, search_or_range)
       list_user_messages('me', qp.to_hash) do |res, error|
         fail "#{error}" if error
-        ids = res.messages.map(&:id)
-        batch_on_messages(ids) do |message|
-          yield message if block
+        ids = (res.messages || []).map(&:id)
+        unless ids.empty?
+          batch_on_messages(ids) do |message|
+            yield message if block
+          end
+          # context.save_page_token(res.next_page_token)
         end
-        # context.save_page_token(res.next_page_token)
       end
     rescue Glima::QueryParameter::FormatError => e
       STDERR.print "Error: " + e.message + "\n"
