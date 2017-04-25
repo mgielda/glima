@@ -380,7 +380,7 @@ class GlimaCLI < Glima::Cli
   def scan(folder, search_or_range = nil)
     index = 1
     client.scan_batch(folder, search_or_range) do |message|
-      puts format_message(index, message, options[:mew])
+      puts format_message(message, index, options[:mew])
       index += 1
     end
   end
@@ -543,7 +543,7 @@ class GlimaCLI < Glima::Cli
               # id = save_message_in_num(m, "+all")
               # id = save_message_in_id(m, "+all")
               message = datastore.update(m)
-              puts format_message(count, message)
+              puts format_message(message, index)
               # puts "#{count} #{id} #{m.snippet[0..40]}..."
             else
               STDERR.puts "Error: #{err}"
@@ -582,14 +582,15 @@ class GlimaCLI < Glima::Cli
     end
   end
 
-  def format_message(count, message, add_mew_link = false)
-    return format_message_mew_virtual(count, message) if add_mew_link
+  def format_message(message, count = nil, add_mew_link = false)
+    return format_message_mew_virtual(message, count) if add_mew_link
 
     date = Time.at(message.internal_date.to_i/1000).strftime("%m/%d %H:%M")
-    return "#{"%4d" % count} #{date} #{message.id} #{CGI.unescapeHTML(message.snippet)[0..30]}"
+    count = if count then ("%4d " % count) else "" end
+    return "#{count}#{date} #{message.id} #{CGI.unescapeHTML(message.snippet)[0..30]}"
   end
 
-  def format_message_mew_virtual(count, message)
+  def format_message_mew_virtual(message, count)
     date = Time.at(message.internal_date.to_i/1000).strftime("%m/%d ")
     mail = Glima::Resource::Mail.new(message)
 
