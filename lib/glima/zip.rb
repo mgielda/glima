@@ -29,7 +29,8 @@ module Glima
           return false
         end
 
-        return true # All files are emtpy?
+        # False-positive if all files are emtpy.
+        return true
       end
     end
 
