@@ -75,13 +75,14 @@ module Glima
     #   + has same From: address
     #   + has near Date: field (+-1day)
     # with the pivot_message.
-    def nearby_messages(pivot_mail)
+    def nearby_mails(pivot_mail)
       from  = "from:#{pivot_mail.from}"
       date1 = (pivot_mail.date.to_date - 1).strftime("after:%Y/%m/%d")
       date2 = (pivot_mail.date.to_date + 1).strftime("before:%Y/%m/%d")
       query = "#{from} #{date1} #{date2}"
       scan_batch("+all", query) do |message|
-        yield message
+        next if pivot_mail.id == message.id
+        yield Glima::Resource::Mail.new(message)
       end
     end
 
