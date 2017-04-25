@@ -140,20 +140,6 @@ module Glima
       @imap.wait(label)
     end
 
-    def batch_on_messages(ids, &block)
-      batch do |batch_client|
-        ids.each do |id|
-          fmt = if @datastore.exist?(id) then "minimal" else "raw" end
-
-          batch_client.get_user_message('me', id, format: fmt) do |m, err|
-            fail "#{err}" if err
-            message = @datastore.update(m)
-            yield message
-          end
-        end
-      end
-    end
-
     def scan_batch(folder, search_or_range = nil, &block)
       qp = Glima::QueryParameter.new(folder, search_or_range)
       list_user_messages('me', qp.to_hash) do |res, error|
@@ -168,6 +154,22 @@ module Glima
       end
     rescue Glima::QueryParameter::FormatError => e
       STDERR.print "Error: " + e.message + "\n"
+    end
+
+    private
+
+    def batch_on_messages(ids, &block)
+      @client.batch do |batch_client|
+        ids.each do |id|
+          fmt = if @datastore.exist?(id) then "minimal" else "raw" end
+
+          batch_client.get_user_message('me', id, format: fmt) do |m, err|
+            fail "#{err}" if err
+            message = @datastore.update(m)
+            yield message
+          end
+        end
+      end
     end
 
   end # class GmailClient
