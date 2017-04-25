@@ -135,7 +135,7 @@ class GlimaCLI < Glima::Cli
       end
 
     else
-      zip = Glima::Zip.new(File.open(File.expand_path(input_file)).read, options[:password])
+      zip = Glima::Zip.read(input_file, options[:password])
       zip.to_decrypted_unicode_zip.write_to_file(output_filename || $stdout)
     end
   end

@@ -5,12 +5,12 @@ module Glima
   class Zip
     attr_accessor :password
 
-    def initialize(zip_content, password = nil)
-      @zip_string = if zip_content.is_a?(String)
-                      zip_content
-                    else
-                      File.open(zip_content).read
-                    end
+    def self.read(zip_filename, password = nil)
+      new(File.open(File.expand_path(zip_file)).read, password)
+    end
+
+    def initialize(zip_string, password = nil)
+      @zip_string = zip_string
       @password = password
     end
 
