@@ -25,6 +25,7 @@ end
 require "rubygems"
 require "glima"
 require "cgi"
+require "logger"
 
 Encoding.default_external="UTF-8"
 
@@ -120,11 +121,10 @@ class GlimaCLI < Glima::Cli
     if options[:attachment]
       mail = Glima::Resource::Mail.read(input_file)
       mail.attachments.each do |attachment|
-        if attachment.filename =~ /\.zip$/i
-          zip = Glima::Zip.new(attachment.body.decoded, options[:password])
-          attachment.body = zip.to_decrypted_unicode_zip.to_base64
-          attachment.content_transfer_encoding = "base64"
-        end
+        next unless attachment.filename =~ /\.zip$/i
+        zip = Glima::Zip.new(attachment.body.decoded, options[:password])
+        attachment.body = zip.to_decrypted_unicode_zip.to_base64
+        attachment.content_transfer_encoding = "base64"
       end
       if output_filename
         File.open(output_filename, "w") do |f|
@@ -321,6 +321,9 @@ class GlimaCLI < Glima::Cli
   desc "dezip GM_MSGID DIRECTORY", "Decrypt zip found in GM_MSGID to DIRECTORY"
 
   def dezip(pivot_id, directory)
+    logger = ::Logger.new(STDOUT)
+    logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
+
     pivot_mail = nil
 
     client.get_user_smart_message(pivot_id) do |m, err|
@@ -330,42 +333,27 @@ class GlimaCLI < Glima::Cli
 
     # find password candidate from emails
     password_candidates = [nil]
-    index = 1
 
-    client.nearby_messages(pivot_mail) do |message|
-      next if message.id == pivot_id
-      puts format_message(index, message)
-      message = datastore.update(message)
-      mail = Glima::Resource::Mail.new(message)
-
+    client.nearby_mails(pivot_mail) do |mail|
+      logger.info "Passwordish mail: " + format_message(mail)
       password_candidates += mail.find_passwordish_strings
-      index += 1
     end
 
     password_candidates.uniq!
 
     # try all passwords to attachment
     pivot_mail.attachments.each do |attachment|
-      if attachment.filename =~ /\.zip$/i
-        zip_filename = File.expand_path(attachment.filename, directory)
+      next unless attachment.filename =~ /\.zip$/i
 
-        zip = Glima::Zip.new(attachment.body.decoded)
+      zip_filename = File.expand_path(attachment.filename, directory)
+      zip = Glima::Zip.new(attachment.body.decoded)
 
-        # try all passwords
-        password_candidates.each do |password|
-          STDERR.print "Try password:'#{password}'..."
-          if zip.correct_password?(password)
-            STDERR.puts "succeeded."
-            zip.password = password
-            STDERR.print "Writing to #{zip_filename || 'STDOUT'}..."
-            zip.to_decrypted_unicode_zip.write_to_file(zip_filename)
-            STDERR.puts "done."
-            break
-          else
-            STDERR.puts "failed."
-          end
-        end
-
+      # try all passwords
+      if zip.unlock_password!(password_candidates, logger)
+        zip.to_decrypted_unicode_zip.write_to_file(zip_filename)
+        logger.info "Wrote to #{zip_filename || 'STDOUT'}."
+      else
+        logger.info "Password unlock failed."
       end
     end
   end
