@@ -1,8 +1,15 @@
 require "mail"
+require 'forwardable'
 
 module Glima
   module Resource
     class Mail < ::Mail::Message
+      extend Forwardable
+
+      def_delegators :@gmail_message,
+      # Users.histoy
+      :internal_date,
+      :snippet
 
       def self.read(mail_filename)
         new(File.open(filename, 'rb') {|f| f.read })
@@ -16,10 +23,12 @@ module Glima
       def gm_msgid
         @gmail_message.id
       end
+      alias_method :id, :gm_msgid
 
       def gm_thrid
         @gmail_message.thread_id
       end
+      alias_method :thread_id, :gm_thrid
 
       def raw
         @gmail_message.raw
