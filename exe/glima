@@ -487,56 +487,6 @@ class GlimaCLI < Glima::Cli
     end
   end
 
-
-  ################################################################
-  # Command: inc
-  ################################################################
-  desc "inc", "Incorporate messages into +inbox"
-
-  def inc
-    next_page_token = nil
-    count = 0
-
-    begin
-      opt = {q: "in:inbox"}
-      opt[:page_token] = next_page_token if next_page_token
-
-      response = client.list_user_messages('me', opt)
-
-      if response.messages.empty?
-        puts 'No messages found'
-        return 0
-      end
-
-      next_page_token = response.next_page_token
-
-      ids = []
-      response.messages.map(&:id).each do |id|
-        next if datastore.exist?(id)
-        ids << id
-      end
-
-      next if ids.empty?
-
-      client.batch do |batch_client|
-        ids.each do |id|
-          batch_client.get_user_message('me', id, format: "raw") do |m, err|
-            count += 1
-            if m
-              # id = save_message_in_num(m, "+all")
-              # id = save_message_in_id(m, "+all")
-              message = datastore.update(m)
-              puts format_message(message, index)
-              # puts "#{count} #{id} #{m.snippet[0..40]}..."
-            else
-              STDERR.puts "Error: #{err}"
-            end
-          end
-        end
-      end
-    end while next_page_token
-  end
-
   ################################################################
   # private
 
@@ -597,7 +547,7 @@ class GlimaCLI < Glima::Cli
     context.save_page_token(page_token)
   end
 
-  attr_reader :builder, :config, :client, :context, :datastore
+  attr_reader :builder, :config, :client, :context
 
   def setup_global_options
     exit_on_error do
