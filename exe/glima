@@ -336,8 +336,6 @@ class GlimaCLI < Glima::Cli
       password_candidates += mail.find_passwordish_strings
     end
 
-    password_candidates.uniq!
-
     # try all passwords to attachment
     pivot_mail.attachments.each do |attachment|
       next unless attachment.filename =~ /\.zip$/i
