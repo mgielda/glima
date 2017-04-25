@@ -34,6 +34,21 @@ module Glima
       end
     end
 
+    def unlock_password!(password_candidates, logger = nil)
+      sort_by_password_strength(password_candidates).each do |password|
+        msg = "Try password:'#{password}' (#{password_strength(password)})..."
+
+        if correct_password?(password)
+          logger.info(msg + " OK.") if logger
+          @password = password
+          return password
+        else
+          logger.info(msg + " NG.") if logger
+        end
+      end
+      return nil # No luck
+    end
+
     def encrypted?
       correct_password?(nil)
     end
@@ -77,6 +92,22 @@ module Glima
     end
 
     private
+
+    def password_strength(password)
+      password = password.to_s
+      score = Math.log2(password.length + 1)
+
+      password.scan(/[a-z]+|[A-Z]+|\d+|[!,@#$%^&*?_~]+/) do |s|
+        score += 1.0
+      end
+      return score
+    end
+
+    def sort_by_password_strength(password_array)
+      password_array.sort{|a,b|
+        password_strength(b) <=> password_strength(a)
+      }
+    end
 
     def with_input_stream(password = nil, &block)
       ::Zip::InputStream.open(StringIO.new(@zip_string), 0, decrypter(password)) do |zis|
