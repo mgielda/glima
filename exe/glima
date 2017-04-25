@@ -329,7 +329,7 @@ class GlimaCLI < Glima::Cli
     end
 
     # find password candidate from emails
-    password_candidates = [nil]
+    password_candidates = []
 
     client.nearby_mails(pivot_mail) do |mail|
       logger.info "Passwordish mail: " + format_message(mail)

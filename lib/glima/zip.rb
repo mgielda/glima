@@ -35,7 +35,9 @@ module Glima
     end
 
     def unlock_password!(password_candidates, logger = nil)
-      sort_by_password_strength(password_candidates.uniq).each do |password|
+      list = sort_by_password_strength(password_candidates.uniq).unshift(nil)
+
+      list.each do |password|
         msg = "Try password:'#{password}' (#{password_strength(password)})..."
 
         if correct_password?(password)
