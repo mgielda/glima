@@ -4,6 +4,10 @@ module Glima
   module Resource
     class Mail < ::Mail::Message
 
+      def self.read(mail_filename)
+        new(File.open(filename, 'rb') {|f| f.read })
+      end
+
       def initialize(message)
         @gmail_message = message
         super(message.raw)

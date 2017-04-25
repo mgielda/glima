@@ -118,7 +118,7 @@ class GlimaCLI < Glima::Cli
 
   def rezip(input_file, output_filename = nil)
     if options[:attachment]
-      mail = Glima::Resource::Mail.new(File.open(input_file, 'rb') { |f| f.read })
+      mail = Glima::Resource::Mail.read(input_file)
       mail.attachments.each do |attachment|
         if attachment.filename =~ /\.zip$/i
           zip = Glima::Zip.new(attachment.body.decoded, options[:password])
