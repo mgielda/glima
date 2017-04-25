@@ -103,9 +103,13 @@ module Glima
     #
     def get_user_smart_message(id)
       fmt = if @datastore.exist?(id) then "minimal" else "raw" end
+
+      mail = nil
       @client.get_user_message('me', id, format: fmt) do |m, err|
-        yield(if m then Glima::Resource::Mail.new(@datastore.update(m)) else nil end, err)
+        mail = Glima::Resource::Mail.new(@datastore.update(m)) if m
+        yield(mail, err)
       end
+      return mail
     end
 
     def online?

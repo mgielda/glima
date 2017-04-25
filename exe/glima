@@ -324,11 +324,8 @@ class GlimaCLI < Glima::Cli
     logger = ::Logger.new(STDOUT)
     logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
 
-    pivot_mail = nil
-
-    client.get_user_smart_message(pivot_id) do |m, err|
+    pivot_mail = client.get_user_smart_message(pivot_id) do |m, err|
       fail "#{err}" if err
-      pivot_mail = m
     end
 
     # find password candidate from emails
