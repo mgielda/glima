@@ -110,6 +110,36 @@ class GlimaCLI < Glima::Cli
   end
 
   ################################################################
+  # Command: xzip
+  ################################################################
+  desc "xzip GM_MSGID", "Convert zip-attachments in GM_MSGID and push to Gmail."
+
+  method_option :add_labels,  :desc => "List of label names to add separated by comma"
+  method_option :del_labels,  :desc => "List of label names to del separated by comma"
+
+  def xzip(message_id)
+    logger = ::Logger.new(STDOUT)
+    logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
+
+    add_labels = options[:add_labels]&.split(/ *, */) || []
+    del_labels = options[:del_labels]&.split(/ *, */) || []
+
+    add_label_ids = add_labels.map {|label_name| label_name_to_id(label_name)}
+    del_label_ids = del_labels.map {|label_name| label_name_to_id(label_name)}
+
+    mail = client.get_user_smart_message(message_id) do |m, err|
+      fail "#{err}" if err
+    end
+
+    unless unlock_zip_mail!(mail, logger)
+      logger.info "Password unlock failed."
+      return false
+    end
+
+    push_mail(mail, "dateHeader", add_label_ids, del_label_ids)
+  end
+
+  ################################################################
   # Command: rezip
   ################################################################
   desc "rezip INPUT_FILE [OUTPUT_FILE]", "Create decrypted and unicode path zip file."
@@ -480,6 +510,13 @@ class GlimaCLI < Glima::Cli
 
   private
 
+  def label_name_to_id(label_name)
+    @all_labels ||= client.list_user_labels('me').labels
+    match = @all_labels.find {|label| label.name == label_name}
+    rails "No label found in Gmail server #{label_name}" unless match
+    return match.id
+  end
+
   def unlock_zip_mail!(zip_mail, logger = nil)
     logger ||= ::Logger.new(STDOUT)
 
@@ -505,6 +542,31 @@ class GlimaCLI < Glima::Cli
       end
     end
     return transformed
+  end
+
+  def push_mail(mail, date_source = "receivedTime", add_label_ids = [], del_label_ids = [])
+    label_ids = (mail.label_ids +
+                 add_label_ids  -
+                 del_label_ids  +
+                 ["INBOX", "UNREAD"]).uniq
+    thid = mail.thread_id
+
+    unless date_source == "dateHeader" || date_source == "receivedTime"
+      raise "Unknown date type: #{date_source}"
+    end
+
+    client.insert_user_message(
+      'me',
+      Google::Apis::GmailV1::Message.new(label_ids: label_ids, thread_id: thid),
+      content_type: "message/rfc822",
+      internal_date_source: date_source,
+      upload_source: StringIO.new(mail.to_s)) do |msg, err|
+      if msg
+        puts "pushed to: #{msg.id}"
+      else
+        STDERR.puts "Error: #{err}"
+      end
+    end
   end
 
   def push_mail_to_server(mail)

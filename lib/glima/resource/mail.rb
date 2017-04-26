@@ -30,6 +30,11 @@ module Glima
       end
       alias_method :thread_id, :gm_thrid
 
+      def gm_label_ids
+        @gmail_message.label_ids
+      end
+      alias_method :label_ids, :gm_label_ids
+
       def raw
         @gmail_message.raw
       end
