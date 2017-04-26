@@ -569,29 +569,6 @@ class GlimaCLI < Glima::Cli
     end
   end
 
-  def push_mail_to_server(mail)
-    labels = options[:label]&.split(/ *, */) || []
-    label_ids = client.list_user_labels('me').labels.find_all {|lbl| labels.member?(lbl.name)}.map(&:id)
-    label_ids += ["INBOX", "UNREAD"]
-    thid = options[:thread] || nil
-    date = if options[:date] == "header" then "dateHeader" else "receivedTime" end
-
-    File.open(email_file) do |source|
-      client.insert_user_message(
-        'me',
-        Google::Apis::GmailV1::Message.new(label_ids: label_ids, thread_id: thid),
-        content_type: "message/rfc822",
-        internal_date_source: date,
-        upload_source: source) do |msg, err|
-        if msg
-          puts "pushed to: #{msg.id}"
-        else
-          STDERR.puts "Error: #{err}"
-        end
-      end
-    end
-  end
-
   def format_message(message, count = nil, add_mew_link = false)
     return format_message_mew_virtual(message, count) if add_mew_link
 
