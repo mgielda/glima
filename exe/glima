@@ -72,7 +72,7 @@ class GlimaCLI < Glima::Cli
       end
 
       # sleep if current history Id is up-to-date
-      client.wait("[Gmail]/すべてのメール") if current_history_id == last_history_id
+      client.wait if current_history_id == last_history_id
 
     end while true
   end

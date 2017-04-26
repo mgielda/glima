@@ -134,8 +134,8 @@ module Glima
       return @client
     end
 
-    # "[Gmail]/すべてのメール"
-    def wait(label = "INBOX")
+    # label == nil means "[Gmail]/All Mail"
+    def wait(label = nil)
       @imap ||= Glima::ImapWatch.new("imap.gmail.com", @client.authorization)
       @imap.wait(label)
     end

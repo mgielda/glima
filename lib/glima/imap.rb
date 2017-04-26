@@ -112,8 +112,15 @@ module Glima
       end
     end
 
-    def wait(folder)
-      @imap.select(Net::IMAP.encode_utf7(folder))
+    def wait(folder = nil)
+      if folder
+        folder = Net::IMAP.encode_utf7(folder)
+      else
+        # select "[Gmail]/All Mail" or localized one like "[Gmail]/すべてのメール"
+        folder = @imap.list("", "[Gmail]/*").find {|f| f.attr.include?(:All)}.name
+      end
+
+      @imap.select(folder)
       begin
         @imap.idle do |resp|
           puts "#{resp.name}"
