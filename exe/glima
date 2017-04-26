@@ -320,36 +320,24 @@ class GlimaCLI < Glima::Cli
   ################################################################
   desc "dezip GM_MSGID DIRECTORY", "Decrypt zip found in GM_MSGID to DIRECTORY"
 
-  def dezip(pivot_id, directory)
+  def dezip(gmail_id, directory)
     logger = ::Logger.new(STDOUT)
     logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
 
-    pivot_mail = client.get_user_smart_message(pivot_id) do |m, err|
+    mail = client.get_user_smart_message(gmail_id) do |m, err|
       fail "#{err}" if err
     end
 
-    # find password candidate from emails
-    password_candidates = []
-
-    client.nearby_mails(pivot_mail) do |mail|
-      logger.info "Passwordish mail: " + format_message(mail)
-      password_candidates += mail.find_passwordish_strings
+    unless unlock_zip_mail!(mail)
+      logger.info "Password unlock failed."
+      return false
     end
 
-    # try all passwords to attachment
-    pivot_mail.attachments.each do |attachment|
+    mail.attachments.each do |attachment|
       next unless attachment.filename =~ /\.zip$/i
-
       zip_filename = File.expand_path(attachment.filename, directory)
-      zip = Glima::Zip.new(attachment.body.decoded)
-
-      # try all passwords
-      if zip.unlock_password!(password_candidates, logger)
-        zip.to_decrypted_unicode_zip.write_to_file(zip_filename)
-        logger.info "Wrote to #{zip_filename || 'STDOUT'}."
-      else
-        logger.info "Password unlock failed."
-      end
+      Glima::Zip.new(attachment.body.decoded).write_to_file(zip_filename)
+      logger.info "Wrote to #{zip_filename || 'STDOUT'}."
     end
   end
 
@@ -491,6 +479,34 @@ class GlimaCLI < Glima::Cli
   # private
 
   private
+
+  def unlock_zip_mail!(zip_mail)
+    logger = ::Logger.new(STDOUT)
+    logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
+
+    password_candidates = []
+
+    client.nearby_mails(zip_mail) do |mail|
+      logger.info "Passwordish mail: " + format_message(mail)
+      password_candidates += mail.find_passwordish_strings
+    end
+
+    # Unlock all zip attachments in mail
+    transformed = false
+
+    zip_mail.attachments.each do |attachment|
+      next unless attachment.filename =~ /\.zip$/i
+
+      zip = Glima::Zip.new(attachment.body.decoded)
+      # try all passwords
+      if zip.unlock_password!(password_candidates, logger)
+        attachment.body = zip.to_decrypted_unicode_zip.to_base64
+        attachment.content_transfer_encoding = "base64"
+        transformed = true
+      end
+    end
+    return transformed
+  end
 
   def push_mail_to_server(mail)
     labels = options[:label]&.split(/ *, */) || []
