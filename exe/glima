@@ -328,7 +328,7 @@ class GlimaCLI < Glima::Cli
       fail "#{err}" if err
     end
 
-    unless unlock_zip_mail!(mail)
+    unless unlock_zip_mail!(mail, logger)
       logger.info "Password unlock failed."
       return false
     end
@@ -480,9 +480,8 @@ class GlimaCLI < Glima::Cli
 
   private
 
-  def unlock_zip_mail!(zip_mail)
-    logger = ::Logger.new(STDOUT)
-    logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
+  def unlock_zip_mail!(zip_mail, logger = nil)
+    logger ||= ::Logger.new(STDOUT)
 
     password_candidates = []
 
