@@ -167,7 +167,7 @@ class GlimaCLI < Glima::Cli
     # labels.get consumes 1quota unit
     # It is only an experiment, not practical...
     #
-    # how to retry batch requests? · Issue #444 · google/google-api-ruby-client
+    # how to retry batch requests? Issue #444 google/google-api-ruby-client
     # https://github.com/google/google-api-ruby-client/issues/444
     # Setting default option should also work, but it has to be done before the service is created.
     #
