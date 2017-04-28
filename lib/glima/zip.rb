@@ -149,39 +149,3 @@ module Glima
 
   end # class Zip
 end # module Glima
-
-__END__
-
-  def decrypted_utf8_zip(zipped_string, output = nil, password = nil)
-    Zip.unicode_names = true
-
-    decrypter = password ? Zip::TraditionalDecrypter.new(password) : nil
-
-    outstream = if output.respond_to?(:write)
-                  output # IO, StringIO or File
-                elsif output.is_a?(String)
-                  File.open(output, "w") # filename
-                else
-                  StringIO.new('') # nil
-                end
-
-    out = Zip::OutputStream.write_buffer(outstream) do |zos|
-      Zip::InputStream.open(StringIO.new(zipped_string), 0, decrypter) do |zis|
-        while entry = zis.get_next_entry
-          name = cp932_path_to_utf8_path(entry.name)
-
-          # Two types of Exception will occur on encrypted zip:
-          #  1) "invalid block type (Zlib::DataError)" if password is not specified.
-          #  2) "invalid stored block lengths (Zlib::DataError)" if password is wrong.
-          content = zis.read
-
-          raise Zlib::DataError if content.size != entry.size
-
-          STDERR.puts "- Name: #{name}"
-          zos.put_next_entry(name)
-          zos.write(content)
-        end
-      end
-    end
-    return out.string if out.respond_to?(:string)
-  end
