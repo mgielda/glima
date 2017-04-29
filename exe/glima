@@ -128,7 +128,7 @@ class GlimaCLI < Glima::Cli
     del_label_ids = del_labels.map {|label_name| label_name_to_id(label_name)}
 
     mail = client.get_user_smart_message(message_id) do |m, err|
-      fail "#{err}" if err
+      exit_if_error(message_id, err, logger)
     end
 
     unless unlock_zip_mail!(mail, logger)
@@ -354,8 +354,13 @@ class GlimaCLI < Glima::Cli
     logger = ::Logger.new(STDOUT)
     logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
 
+    unless File.writable?(File.expand_path(directory))
+      logger.error "#{directory} is not writable."
+      exit 1
+    end
+
     mail = client.get_user_smart_message(gmail_id) do |m, err|
-      fail "#{err}" if err
+      exit_if_error(gmail_id, err, logger)
     end
 
     unless unlock_zip_mail!(mail, logger)
@@ -509,6 +514,12 @@ class GlimaCLI < Glima::Cli
   # private
 
   private
+
+  def exit_if_error(message, error, logger)
+    return true unless error
+    logger.error "#{error.message.split(':').last.strip} #{message}."
+    exit 1
+  end
 
   def label_name_to_id(label_name)
     @all_labels ||= client.list_user_labels('me').labels
