@@ -173,6 +173,7 @@ module Glima
                     :client_secret => String,
                     :token_store => String,
                     :context_store => String,
+                    :zip_passwords_file => String,
                     :default_user => String
     end # class General
 

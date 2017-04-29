@@ -131,7 +131,7 @@ class GlimaCLI < Glima::Cli
       exit_if_error(message_id, err, logger)
     end
 
-    unless unlock_zip_mail!(mail, logger)
+    unless unlock_zip_mail!(mail, [], logger)
       logger.info "Password unlock failed."
       return false
     end
@@ -350,6 +350,8 @@ class GlimaCLI < Glima::Cli
   ################################################################
   desc "dezip GM_MSGID DIRECTORY", "Decrypt zip found in GM_MSGID to DIRECTORY"
 
+  method_option :zip_passwords_file, :desc => "Set additional password-list file."
+
   def dezip(gmail_id, directory)
     logger = ::Logger.new(STDOUT)
     logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
@@ -363,7 +365,12 @@ class GlimaCLI < Glima::Cli
       exit_if_error(gmail_id, err, logger)
     end
 
-    unless unlock_zip_mail!(mail, logger)
+    pfile = config.general.zip_passwords_file || options[:password_file]
+    if File.exists?(pfile)
+      passwords = File.open(pfile) {|f| f.read.split(/\n+/) }
+    end
+
+    unless unlock_zip_mail!(mail, passwords, logger)
       logger.info "Password unlock failed."
       return false
     end
@@ -528,10 +535,10 @@ class GlimaCLI < Glima::Cli
     return match.id
   end
 
-  def unlock_zip_mail!(zip_mail, logger = nil)
+  def unlock_zip_mail!(zip_mail, additional_passwords = [], logger = nil)
     logger ||= ::Logger.new(STDOUT)
 
-    password_candidates = []
+    password_candidates = [] + additional_passwords
 
     client.nearby_mails(zip_mail) do |mail|
       logger.info "Passwordish mail: " + format_message(mail)
