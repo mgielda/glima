@@ -555,6 +555,8 @@ class GlimaCLI < Glima::Cli
       raise "Unknown date type: #{date_source}"
     end
 
+    mail.header["X-Glima-Processed"] = DateTime.now.rfc2822
+
     client.insert_user_message(
       'me',
       Google::Apis::GmailV1::Message.new(label_ids: label_ids, thread_id: thid),
