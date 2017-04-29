@@ -5,11 +5,11 @@ module Glima
   class Zip
     attr_accessor :password
 
-    def self.read(zip_filename, password = nil)
+    def self.read(zip_filename, password = "")
       new(File.open(File.expand_path(zip_file)).read, password)
     end
 
-    def initialize(zip_string, password = nil)
+    def initialize(zip_string, password = "")
       @zip_string = zip_string
       @password = password
     end
@@ -35,7 +35,7 @@ module Glima
     end
 
     def unlock_password!(password_candidates, logger = nil)
-      list = sort_by_password_strength(password_candidates.uniq).unshift(nil)
+      list = sort_by_password_strength(password_candidates.uniq).unshift("")
 
       list.each do |password|
         msg = "Try password:'#{password}' (#{password_strength(password)})..."
@@ -43,7 +43,7 @@ module Glima
         if correct_password?(password)
           logger.info(msg + " OK.") if logger
           @password = password
-          return password
+          return password # Found password
         else
           logger.info(msg + " NG.") if logger
         end
@@ -52,7 +52,7 @@ module Glima
     end
 
     def encrypted?
-      correct_password?(nil)
+      correct_password?("")
     end
 
     def write_to_file(file)
@@ -111,14 +111,18 @@ module Glima
       }
     end
 
-    def with_input_stream(password = nil, &block)
+    def with_input_stream(password = "", &block)
       ::Zip::InputStream.open(StringIO.new(@zip_string), 0, decrypter(password)) do |zis|
         yield zis
       end
     end
 
-    def decrypter(password = nil)
-      password ? ::Zip::TraditionalDecrypter.new(password) : nil
+    def decrypter(password = "")
+      if password.empty?
+        nil # return empty decrypter
+      else
+        ::Zip::TraditionalDecrypter.new(password)
+      end
     end
 
     # 1) Convert CP932 (SJIS) to UTF8.
