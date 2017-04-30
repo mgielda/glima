@@ -121,11 +121,9 @@ class GlimaCLI < Glima::Cli
     logger = ::Logger.new(STDOUT)
     logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
 
-    add_labels = options[:add_labels]&.split(/ *, */) || []
-    del_labels = options[:del_labels]&.split(/ *, */) || []
+    add_label_ids = parse_label_names(options[:add_labels])
+    del_label_ids = parse_label_names(options[:del_labels])
 
-    add_label_ids = add_labels.map {|label_name| label_name_to_id(label_name)}
-    del_label_ids = del_labels.map {|label_name| label_name_to_id(label_name)}
 
     mail = client.get_user_smart_message(message_id) do |m, err|
       exit_if_error(message_id, err, logger)
@@ -236,18 +234,13 @@ class GlimaCLI < Glima::Cli
   desc "label GM_MSGID", "Add/Remove labels to/from GM_MSGID"
 
   method_option :add, :desc => "List of label names to add separated by comma"
-  method_option :remove, :desc => "List of label names to remove separated by comma"
+  method_option :del, :desc => "List of label names to del separated by comma"
 
   def label(message_id)
     req = {}
 
-    if add = options[:add]
-      req[:add_label_ids] = add.split(/ *, */)
-    end
-
-    if remove = options[:remove]
-      req[:remove_label_ids] = remove.split(/ *, */)
-    end
+    req[:add_label_ids]    = parse_label_names(options[:add]) if options[:add]
+    req[:remove_label_ids] = parse_label_names(options[:del]) if options[:del]
 
     if req.empty?
       puts "Do nothing."
@@ -531,6 +524,11 @@ class GlimaCLI < Glima::Cli
   def error_and_exit(message)
     STDERR.puts message
     exit 1
+  end
+
+  def parse_label_names(label_names)
+    (label_names&.split(/ *, */) || [])
+      .map {|label_name| label_name_to_id(label_name)}
   end
 
   def label_name_to_id(label_name)
