@@ -162,37 +162,6 @@ class GlimaCLI < Glima::Cli
   end
 
   ################################################################
-  # Command: rezip
-  ################################################################
-  desc "rezip INPUT_FILE [OUTPUT_FILE]", "Create decrypted and unicode path zip file."
-
-  method_option :password,   :desc => "Password for decryption."
-  method_option :attachment, :desc => "Replace attachment of email INPUT_FILE.", :type => :boolean
-
-  def rezip(input_file, output_filename = nil)
-    if options[:attachment]
-      mail = Glima::Resource::Mail.read(input_file)
-      mail.attachments.each do |attachment|
-        next unless attachment.filename =~ /\.zip$/i
-        zip = Glima::Zip.new(attachment.body.decoded, options[:password])
-        attachment.body = zip.to_decrypted_unicode_zip.to_base64
-        attachment.content_transfer_encoding = "base64"
-      end
-      if output_filename
-        File.open(output_filename, "w") do |f|
-          f.write(mail.to_s)
-        end
-      else
-        print mail.to_s
-      end
-
-    else
-      zip = Glima::Zip.read(input_file, options[:password])
-      zip.to_decrypted_unicode_zip.write_to_file(output_filename || $stdout)
-    end
-  end
-
-  ################################################################
   # Command: labels
   ################################################################
   desc "labels", "List labels"
