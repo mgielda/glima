@@ -528,10 +528,15 @@ class GlimaCLI < Glima::Cli
     exit 1
   end
 
+  def error_and_exit(message)
+    STDERR.puts message
+    exit 1
+  end
+
   def label_name_to_id(label_name)
     @all_labels ||= client.list_user_labels('me').labels
     match = @all_labels.find {|label| label.name == label_name}
-    rails "No label found in Gmail server #{label_name}" unless match
+    error_and_exit("No label found '#{label_name}'") unless match
     return match.id
   end
 
