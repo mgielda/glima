@@ -156,6 +156,16 @@ module Glima
       STDERR.print "Error: " + e.message + "\n"
     end
 
+    def find_messages(query)
+      qp = Glima::QueryParameter.new("+all", query)
+      list_user_messages('me', qp.to_hash) do |res, error|
+        STDERR.print "#{error}" if error
+        return (res.messages || []).map(&:id)
+      end
+    rescue Glima::QueryParameter::FormatError => e
+      STDERR.print "Error: " + e.message + "\n"
+    end
+
     private
 
     def batch_on_messages(ids, &block)

@@ -6,7 +6,9 @@ module Glima
       @params = {}
       @folder, @query_string = folder, query_string
 
-      if /^\+(\S+)/ =~ folder
+      if folder == "+all"
+        @params[:q] = ""
+      elsif /^\+(\S+)/ =~ folder
         @params[:q] = "in:\"#{$1}\""
       else
         fail "Unknown folder: #{folder}."
