@@ -138,7 +138,10 @@ class GlimaCLI < Glima::Cli
       return false
     end
 
-    push_mail(mail, "dateHeader", add_label_ids, del_label_ids)
+    unless push_mail(mail, "dateHeader", add_dst_label_ids, del_dst_label_ids)
+      error_and_exit("Push mail failed.")
+    end
+
     if add_src_label_ids.empty? && del_src_label_ids.empty?
       return 0
     end
@@ -421,6 +424,8 @@ class GlimaCLI < Glima::Cli
 
   def show(id)
     client.get_user_smart_message(id) do |message|
+      error_and_exit("No message found id:#{id}.") unless message
+
       if options[:raw]
         print message.raw
       else
@@ -607,8 +612,10 @@ class GlimaCLI < Glima::Cli
       upload_source: StringIO.new(mail.to_s)) do |msg, err|
       if msg
         puts "pushed to: #{msg.id}"
+        return true
       else
         STDERR.puts "Error: #{err}"
+        return false
       end
     end
   end
