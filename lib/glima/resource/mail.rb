@@ -44,12 +44,7 @@ module Glima
         parts = if mail.multipart? then mail.parts else [mail] end
 
         body = parts.map do |part|
-          if part.content_type =~ /text\/plain/
-            charset = part.content_type_parameters["charset"]
-            convert_to_utf8(part.body.decoded.to_s, charset)
-          else
-            "NOT_TEXT_PART (#{part.content_type})\n"
-          end
+          part_to_plain_text(part)
         end.join("-- PART ---- PART ---- PART ---- PART ---- PART --\n")
 
         return pretty_hearder + "\n" + body
@@ -69,6 +64,18 @@ module Glima
       end
 
       private
+
+      def part_to_plain_text(part)
+        case part.content_type
+        when /text\/plain/
+          convert_to_utf8(part.body.decoded.to_s,
+                          part.content_type_parameters["charset"])
+        when /multipart\/alternative/
+          part_to_plain_text(part.text_part)
+        else
+          "NOT_TEXT_PART (#{part.content_type})\n"
+        end
+      end
 
       def convert_to_utf8(string, from_charset = nil)
         if from_charset && from_charset != "utf-8"
