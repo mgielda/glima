@@ -114,16 +114,20 @@ class GlimaCLI < Glima::Cli
   ################################################################
   desc "xzip GM_MSGID", "Convert zip-attachments in GM_MSGID and push to Gmail."
 
-  method_option :add_labels,  :desc => "List of label names to add separated by comma"
-  method_option :del_labels,  :desc => "List of label names to del separated by comma"
+  method_option :add_src_labels, :desc => "Add labels to source",        :banner => "LABEL,..."
+  method_option :add_dst_labels, :desc => "Add labels to destination",   :banner => "LABEL,..."
+  method_option :del_src_labels, :desc => "Del labels from source",      :banner => "LABEL,..."
+  method_option :del_dst_labels, :desc => "Del labels from destination", :banner => "LABEL,..."
 
   def xzip(message_id)
     logger = ::Logger.new(STDOUT)
     logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
 
-    add_label_ids = parse_label_names(options[:add_labels])
-    del_label_ids = parse_label_names(options[:del_labels])
+    add_src_label_ids = parse_label_names(options[:add_src_labels])
+    del_src_label_ids = parse_label_names(options[:del_src_labels])
 
+    add_dst_label_ids = parse_label_names(options[:add_dst_labels])
+    del_dst_label_ids = parse_label_names(options[:del_dst_labels])
 
     mail = client.get_user_smart_message(message_id) do |m, err|
       exit_if_error(message_id, err, logger)
@@ -135,6 +139,23 @@ class GlimaCLI < Glima::Cli
     end
 
     push_mail(mail, "dateHeader", add_label_ids, del_label_ids)
+    if add_src_label_ids.empty? && del_src_label_ids.empty?
+      return 0
+    end
+
+    req = {}
+    req[:add_label_ids]    = add_src_label_ids
+    req[:remove_label_ids] = del_src_label_ids
+
+    req = Google::Apis::GmailV1::ModifyMessageRequest.new(req)
+
+    client.modify_message('me', message_id, req) do |res,err|
+      if res
+        puts "Update #{message_id} successfully."
+      else
+        puts "Error: #{err}"
+      end
+    end
   end
 
   ################################################################
