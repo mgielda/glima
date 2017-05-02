@@ -218,10 +218,10 @@ class GlimaCLI < Glima::Cli
     all_ids.each_slice(100) do |ids|
       client.batch do |batch_client|
         ids.each do |id|
-          batch_client.get_user_label('me', id) do |label, err|
+          batch_client.get_user_label(id) do |label, err|
             if label
               puts "--- #{index}/#{total} -------------------------------------------------"
-              # puts Glima::Resource::Label.new(label).dump
+              puts Glima::Resource::Label.new(label).dump
               index += 1
             else
               puts "Error: #{err}"
@@ -276,7 +276,7 @@ class GlimaCLI < Glima::Cli
 
     client.batch do |batch_client|
       message_ids.each do |id|
-        batch_client.trash_user_message('me', id) do |res, err|
+        batch_client.trash_user_message(id) do |res, err|
           if res
             puts "Trash #{id} successfully."
           else
@@ -446,7 +446,7 @@ class GlimaCLI < Glima::Cli
     end
 
     user_label_ids.each do |label_id|
-      label = client.get_user_label('me', label_id)
+      label = client.get_user_label(label_id)
       puts "#{label_id} -> #{label.name}"
     end
   end

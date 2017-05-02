@@ -50,7 +50,7 @@ module Glima
 
     # Users.labels
     :list_user_labels,
-    :get_user_label,
+    # :get_user_label,
     :patch_user_label,
 
     # Users.messages
@@ -58,16 +58,13 @@ module Glima
     :insert_user_message,
     :list_user_messages,
     :modify_message,
-    :trash_user_message,
+    # :trash_user_message,
 
     # Users.threads
     :get_user_thread,
 
     # Users getProfile
     :get_user_profile,
-
-    # Non-resources
-    :batch
 
 
     # Find nearby messages from pivot_message
@@ -105,7 +102,7 @@ module Glima
       fmt = if @datastore.exist?(id) then "minimal" else "raw" end
 
       mail = nil
-      @client.get_user_message('me', id, format: fmt) do |m, err|
+      @client.get_user_message(me, id, format: fmt) do |m, err|
         mail = Glima::Resource::Mail.new(@datastore.update(m)) if m
         yield(mail, err)
       end
@@ -140,9 +137,28 @@ module Glima
       @imap.wait(label)
     end
 
+    def get_user_label(id, fields: nil, options: nil, &block)
+      client.get_user_label(me, id, fields: fields, options: options, &block)
+    end
+
+    def trash_user_message(id, fields: nil, options: nil, &block)
+      client.trash_user_message(me, id, fields: fields, options: options, &block)
+    end
+
+    def batch(options = nil)
+      @client.batch(options) do |batch_client|
+        begin
+          Thread.current[:glima_api_batch] = batch_client
+          yield self
+        ensure
+          Thread.current[:glima_api_batch] = nil
+        end
+      end
+    end
+
     def scan_batch(folder, search_or_range = nil, &block)
       qp = Glima::QueryParameter.new(folder, search_or_range)
-      list_user_messages('me', qp.to_hash) do |res, error|
+      list_user_messages(me, qp.to_hash) do |res, error|
         fail "#{error}" if error
         ids = (res.messages || []).map(&:id)
         unless ids.empty?
@@ -158,7 +174,7 @@ module Glima
 
     def find_messages(query)
       qp = Glima::QueryParameter.new("+all", query)
-      list_user_messages('me', qp.to_hash) do |res, error|
+      list_user_messages(me, qp.to_hash) do |res, error|
         STDERR.print "#{error}" if error
         return (res.messages || []).map(&:id)
       end
@@ -168,12 +184,20 @@ module Glima
 
     private
 
+    def me
+      'me'
+    end
+
+    def client
+      Thread.current[:glima_api_batch] || @client
+    end
+
     def batch_on_messages(ids, &block)
       @client.batch do |batch_client|
         ids.each do |id|
           fmt = if @datastore.exist?(id) then "minimal" else "raw" end
 
-          batch_client.get_user_message('me', id, format: fmt) do |m, err|
+          batch_client.get_user_message(me, id, format: fmt) do |m, err|
             fail "#{err}" if err
             message = @datastore.update(m)
             yield message
