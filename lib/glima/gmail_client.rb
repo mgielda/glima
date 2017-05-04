@@ -146,6 +146,27 @@ module Glima
       @imap.wait(label)
     end
 
+    def each_events(since:)
+      options, response = {start_history_id: since}, nil
+
+      loop do
+        client.list_user_histories(me, options) do |res, err|
+          raise err if err
+          response = res
+        end
+
+        break unless response.history
+
+        response.history.each do |h|
+          Glima::Resource::History.new(h).to_events.each do |ev|
+            yield ev
+          end
+        end
+
+        break unless options[:page_token] = response.next_page_token
+      end
+    end
+
     def get_user_label(id, fields: nil, options: nil, &block)
       client.get_user_label(me, id, fields: fields, options: options, &block)
     end

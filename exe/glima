@@ -302,6 +302,17 @@ class GlimaCLI < Glima::Cli
   end
 
   ################################################################
+  # Command: events
+  ################################################################
+  desc "events SINCE", "List operation history SINCE."
+
+  def events(since)
+    client.each_events(since: since) do |ev|
+      puts ev.dump
+    end
+  end
+
+  ################################################################
   # Command: history
   ################################################################
   desc "history LAST_HISTORY_ID", "List operation history since LAST_HISTORY_ID."

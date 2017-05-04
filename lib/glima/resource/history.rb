@@ -1,6 +1,44 @@
 module Glima
   module Resource
     class History < Base
+      class Event
+        attr_reader :history_id, :message, :type, :label_ids
+
+        def initialize(history_id:, message:, type:, label_ids: nil)
+          @history_id, @message, @type, @label_ids = history_id, message, type, label_ids
+        end
+
+        def dump
+          str = "history: #{history_id}, messgae: #{message.id}, type: #{type}"
+          str += ", label_ids: #{label_ids.join(',')}" if label_ids
+          str
+        end
+      end
+
+      # Single history entry will be converted to multiple events
+      def to_events
+        events = []
+        h = @raw_resource
+        id = h.id
+
+        h.messages_added.each do |ent|
+          events << Event.new(history_id: id, message: ent.message, type: :added)
+        end if h.messages_added
+
+        h.messages_deleted.each do |ent|
+          events << Event.new(history_id: id, message: ent.message, type: :deleted)
+        end if h.messages_deleted
+
+        h.labels_added.each do |ent|
+          events << Event.new(history_id: id, message: ent.message, type: :labels_added, label_ids: ent.label_ids)
+        end if h.labels_added
+
+        h.labels_removed.each do |ent|
+          events << Event.new(history_id: id, message: ent.message, type: :labels_removed, label_ids: ent.label_ids)
+        end if h.labels_removed
+
+        return events
+      end
 
       def dump
         h = @raw_resource
