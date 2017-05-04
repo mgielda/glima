@@ -120,9 +120,6 @@ class GlimaCLI < Glima::Cli
   method_option :del_dst_labels, :desc => "Del labels from destination", :banner => "LABEL,..."
 
   def xzip(target)
-    logger = ::Logger.new(STDOUT)
-    logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
-
     add_src_label_ids = parse_label_names(options[:add_src_labels])
     del_src_label_ids = parse_label_names(options[:del_src_labels])
 
@@ -143,7 +140,7 @@ class GlimaCLI < Glima::Cli
         end
       end
 
-      unless unlock_zip_mail!(mail, [], logger)
+      unless unlock_zip_mail!(mail, [])
         logger.info "Password unlock failed."
         next
       end
@@ -351,9 +348,6 @@ class GlimaCLI < Glima::Cli
   method_option :zip_passwords_file, :desc => "Set additional password-list file."
 
   def dezip(gmail_id, directory)
-    logger = ::Logger.new(STDOUT)
-    logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
-
     unless File.writable?(File.expand_path(directory))
       logger.error "#{directory} is not writable."
       exit 1
@@ -368,7 +362,7 @@ class GlimaCLI < Glima::Cli
       passwords = File.open(pfile) {|f| f.read.split(/\n+/) }
     end
 
-    unless unlock_zip_mail!(mail, passwords, logger)
+    unless unlock_zip_mail!(mail, passwords)
       logger.info "Password unlock failed."
       return false
     end
@@ -545,9 +539,7 @@ class GlimaCLI < Glima::Cli
     return match.id
   end
 
-  def unlock_zip_mail!(zip_mail, additional_passwords = [], logger = nil)
-    logger ||= ::Logger.new(STDOUT)
-
+  def unlock_zip_mail!(zip_mail, additional_passwords = [])
     password_candidates = [] + additional_passwords
 
     client.nearby_mails(zip_mail) do |mail|
@@ -633,7 +625,7 @@ class GlimaCLI < Glima::Cli
     context.save_page_token(page_token)
   end
 
-  attr_reader :builder, :config, :client, :context
+  attr_reader :builder, :config, :client, :context, :logger
 
   def setup_global_options
     exit_on_error do
@@ -641,6 +633,9 @@ class GlimaCLI < Glima::Cli
       @datastore = Glima::DataStore.new(File.expand_path("~/Mail"))
       @client = Glima::GmailClient.new(config.general, @datastore)
       @context = Glima::Context.new(File.expand_path(CONFIG_HOME))
+
+      @logger = ::Logger.new($stderr)
+      @logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
 
       if options[:profile]
         require 'profiler'

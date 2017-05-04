@@ -116,7 +116,7 @@ module Glima
       }.map(&:addr).map(&:ip_address).length > 0
     end
 
-    def initialize(config, datastore)
+    def initialize(config, datastore, logger = nil)
       authorizer = Authorizer.new(config.client_id,
                                   config.client_secret,
                                   Google::Apis::GmailV1::AUTH_SCOPE,
@@ -129,6 +129,14 @@ module Glima
       @client.client_options.application_name = 'glima'
       @client.authorization = credentials
       @client.authorization.username = config.default_user # for IMAP
+
+      if logger
+        @logger = logger
+      else
+        @logger = ::Logger.new($stderr)
+        @logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
+      end
+
       return @client
     end
 
