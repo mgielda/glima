@@ -17,11 +17,12 @@ module Glima
       )
     end
 
-    def credentials(user_id = "default")
+    def credentials(user_id)
       @authorizer.get_credentials(user_id)
     end
 
-    def auth_interactively(user_id = "default", shell = Thor.new.shell)
+    def auth_interactively(user_id)
+      shell   = Thor.new.shell
       oob_uri = "urn:ietf:wg:oauth:2.0:oob"
 
       url = @authorizer.get_authorization_url(base_url: oob_uri)
@@ -64,7 +65,7 @@ module Glima
     :get_user_thread,
 
     # Users getProfile
-    :get_user_profile,
+    :get_user_profile
 
 
     # Find nearby messages from pivot_message
