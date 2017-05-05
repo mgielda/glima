@@ -78,9 +78,9 @@ module Glima
       date1 = (pivot_mail.date.to_date - 1).strftime("after:%Y/%m/%d")
       date2 = (pivot_mail.date.to_date + 1).strftime("before:%Y/%m/%d")
       query = "#{from} -in:trash #{date1} #{date2}"
-      scan_batch("+all", query) do |message|
-        next if pivot_mail.id == message.id
-        yield Glima::Resource::Mail.new(message)
+      scan_batch("+all", query) do |mail|
+        next if pivot_mail.id == mail.id
+        yield mail
       end
     end
 
@@ -210,7 +210,7 @@ module Glima
         ids = (res.messages || []).map(&:id)
         unless ids.empty?
           batch_on_messages(ids) do |message|
-            yield message if block
+            yield Glima::Resource::Mail.new(message) if block
           end
           # context.save_page_token(res.next_page_token)
         end
@@ -227,6 +227,18 @@ module Glima
       end
     rescue Glima::QueryParameter::FormatError => e
       STDERR.print "Error: " + e.message + "\n"
+    end
+
+    def labels
+      @labels ||= client.list_user_labels(me).labels
+    end
+
+    def label_by_name(label_name)
+      labels.find {|label| label.name == label_name}
+    end
+
+    def label_by_id(label_id)
+      labels.find {|label| label.id == label_id}
     end
 
     private

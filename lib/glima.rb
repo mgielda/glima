@@ -5,6 +5,7 @@ module Glima
   dir = File.dirname(__FILE__) + "/glima"
 
   autoload :Cli,                  "#{dir}/cli.rb"
+  autoload :Command,              "#{dir}/command.rb"
   autoload :Config,               "#{dir}/config.rb"
   autoload :Context,              "#{dir}/context.rb"
   autoload :DataStore,            "#{dir}/datastore.rb"

@@ -48,10 +48,10 @@ class GlimaCLI < Glima::Cli
     client.watch(label) do |ev|
       puts "Get event #{ev}"
       if ev.message.label_ids.map {|id| label_id_to_name(id)}.member?("glima/queue")
-        options[:add_dst_labels] = "glima/decrypted"
-        options[:del_dst_labels] = "glima/queue"
-        options[:del_src_labels] = "glima/queue"
-        xzip(ev.message.id)
+        Glima::Command::Xzip.new(client, logger, ev.message.id,
+                          add_dst_labels: "glima/decrypted",
+                          del_dst_labels: "glima/queue",
+                          del_src_labels: "glima/queue")
       end
     end
   end
@@ -91,7 +91,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: xzip
   ################################################################
-  desc "xzip TARGET", "Convert zip-attachments in TARGET and push to Gmail."
+  desc "xzip TARGET", "Transform zip-attachments in TARGET and transmit to Gmail."
 
   method_option :add_src_labels, :desc => "Add labels to source",        :banner => "LABEL,..."
   method_option :add_dst_labels, :desc => "Add labels to destination",   :banner => "LABEL,..."
@@ -99,54 +99,11 @@ class GlimaCLI < Glima::Cli
   method_option :del_dst_labels, :desc => "Del labels from destination", :banner => "LABEL,..."
 
   def xzip(target)
-    add_src_label_ids = parse_label_names(options[:add_src_labels])
-    del_src_label_ids = parse_label_names(options[:del_src_labels])
-
-    add_dst_label_ids = parse_label_names(options[:add_dst_labels])
-    del_dst_label_ids = parse_label_names(options[:del_dst_labels])
-
-    ids = if target =~ /^[\da-fA-F]{16}$/
-            [target]
-          else
-            client.find_messages(target)
-          end
-
-    ids.each do |message_id|
-      mail = client.get_user_smart_message(message_id) do |m, err|
-        if err
-          puts "Error: #{err}"
-          next
-        end
-      end
-
-      unless unlock_zip_mail!(mail, [])
-        logger.info "Password unlock failed."
-        next
-      end
-
-      unless push_mail(mail, "dateHeader", add_dst_label_ids, del_dst_label_ids)
-        puts "Push mail failed."
-        next
-      end
-
-      if add_src_label_ids.empty? && del_src_label_ids.empty?
-        next
-      end
-
-      req = {}
-      req[:add_label_ids]    = add_src_label_ids
-      req[:remove_label_ids] = del_src_label_ids
-
-      req = Google::Apis::GmailV1::ModifyMessageRequest.new(req)
-
-      client.modify_message('me', message_id, req) do |res,err|
-        if res
-          puts "Update #{message_id} successfully."
-        else
-          puts "Error: #{err}"
-        end
-      end
-    end
+    Glima::Command::Xzip.new(client, logger, target,
+                             add_src_labels: parse_label_names(options[:add_src_labels]),
+                             del_src_labels: parse_label_names(options[:del_src_labels]),
+                             add_dst_labels: parse_label_names(options[:add_dst_labels]),
+                             del_dst_labels: parse_label_names(options[:del_dst_labels]))
   end
 
   ################################################################
@@ -220,8 +177,8 @@ class GlimaCLI < Glima::Cli
   def label(message_id)
     req = {}
 
-    req[:add_label_ids]    = parse_label_names(options[:add]) if options[:add]
-    req[:remove_label_ids] = parse_label_names(options[:del]) if options[:del]
+    req[:add_label_ids]    = parse_label_names(options[:add]).map(&:id) if options[:add]
+    req[:remove_label_ids] = parse_label_names(options[:del]).map(&:id) if options[:del]
 
     if req.empty?
       puts "Do nothing."
@@ -347,16 +304,26 @@ class GlimaCLI < Glima::Cli
       exit_if_error(gmail_id, err, logger)
     end
 
+    # get password candidates from config file
+    password_candidates = []
     pfile = config.general.zip_passwords_file || options[:password_file]
     if File.exists?(pfile)
-      passwords = File.open(pfile) {|f| f.read.split(/\n+/) }
+      password_candidates += File.open(pfile) {|f| f.read.split(/\n+/) }
     end
 
-    unless unlock_zip_mail!(mail, passwords)
+    # gather password candidates from nearby mails
+    client.nearby_mails(mail) do |nm|
+      logger.info "Passwordish mail: " + nm.format_summary
+      password_candidates += nm.find_passwordish_strings
+    end
+
+    # try to unlock zip attachments
+    unless mail.unlock_zip!(password_candidates, logger)
       logger.info "Password unlock failed."
       return false
     end
 
+    # Write to unlocked zip file to DIRECTORY
     mail.attachments.each do |attachment|
       next unless attachment.filename =~ /\.zip$/i
       zip_filename = File.expand_path(attachment.filename, directory)
@@ -374,8 +341,12 @@ class GlimaCLI < Glima::Cli
 
   def scan(folder, search_or_range = nil)
     index = 1
-    client.scan_batch(folder, search_or_range) do |message|
-      puts format_message(message, index, options[:mew])
+    client.scan_batch(folder, search_or_range) do |mail|
+      if options[:mew]
+        puts mail.format_mew(index)
+      else
+        puts mail.format_summary(index)
+      end
       index += 1
     end
   end
@@ -519,103 +490,7 @@ class GlimaCLI < Glima::Cli
 
   def parse_label_names(label_names)
     (label_names&.split(/ *, */) || [])
-      .map {|label_name| label_name_to_id(label_name)}
-  end
-
-  def label_name_to_id(label_name)
-    @all_labels ||= client.list_user_labels('me').labels
-    match = @all_labels.find {|label| label.name == label_name}
-    error_and_exit("No label found '#{label_name}'") unless match
-    return match.id
-  end
-
-  def label_id_to_name(label_id)
-    @all_labels ||= client.list_user_labels('me').labels
-    match = @all_labels.find {|label| label.id == label_id}
-    error_and_exit("No label found '#{label_name}'") unless match
-    return match.name
-  end
-
-  def unlock_zip_mail!(zip_mail, additional_passwords = [])
-    password_candidates = [] + additional_passwords
-
-    client.nearby_mails(zip_mail) do |mail|
-      logger.info "Passwordish mail: " + format_message(mail)
-      password_candidates += mail.find_passwordish_strings
-    end
-
-    # Unlock all zip attachments in mail
-    transformed = false
-
-    zip_mail.attachments.each do |attachment|
-      next unless attachment.filename =~ /\.zip$/i
-
-      zip = Glima::Zip.new(attachment.body.decoded)
-      # try all passwords
-      if zip.unlock_password!(password_candidates, logger)
-        attachment.body = zip.to_decrypted_unicode_zip.to_base64
-        attachment.content_transfer_encoding = "base64"
-        transformed = true
-      end
-    end
-    return transformed
-  end
-
-  def push_mail(mail, date_source = "receivedTime", add_label_ids = [], del_label_ids = [])
-    label_ids = (mail.label_ids +
-                 add_label_ids  -
-                 del_label_ids  +
-                 ["INBOX", "UNREAD"]).uniq
-    thid = mail.thread_id
-
-    unless date_source == "dateHeader" || date_source == "receivedTime"
-      raise "Unknown date type: #{date_source}"
-    end
-
-    mail.header["X-Glima-Processed"] = DateTime.now.rfc2822
-
-    client.insert_user_message(
-      'me',
-      Google::Apis::GmailV1::Message.new(label_ids: label_ids, thread_id: thid),
-      content_type: "message/rfc822",
-      internal_date_source: date_source,
-      upload_source: StringIO.new(mail.to_s)) do |msg, err|
-      if msg
-        puts "pushed to: #{msg.id}"
-        return true
-      else
-        STDERR.puts "Error: #{err}"
-        return false
-      end
-    end
-  end
-
-  def format_message(message, count = nil, add_mew_link = false)
-    return format_message_mew_virtual(message, count) if add_mew_link
-
-    date = Time.at(message.internal_date.to_i/1000).strftime("%m/%d %H:%M")
-    count = if count then ("%4d " % count) else "" end
-    return "#{count}#{date} #{message.id} #{CGI.unescapeHTML(message.snippet)[0..30]}"
-  end
-
-  def format_message_mew_virtual(message, count)
-    date = Time.at(message.internal_date.to_i/1000).strftime("%m/%d ")
-    mail = Glima::Resource::Mail.new(message)
-
-    mark1 = " "
-    mark1 = "U" if message.label_ids.include?("UNREAD")
-
-    mark2 = " "
-    mark2 = "-" if mail.content_type =~ /multipart\/alternative/
-    mark2 = "M" unless mail.attachments.empty?
-
-    folder = File.expand_path("~/Mail/all") # XXX
-
-    summary = "#{mark1}#{mark2}#{date} #{CGI.unescapeHTML(message.snippet)}"
-    summary += "\r +#{folder} #{message.id} <#{message.id}>"
-    summary += if message.id != message.thread_id then " <#{message.thread_id}>" else " " end
-
-    return summary + " 1 2"
+      .map {|label_name| client.label_by_name(label_name)}
   end
 
   def store_page_token(page_token)

@@ -63,6 +63,49 @@ module Glima
         return password_candidates
       end
 
+      def unlock_zip!(password_candidates = [""], logger = nil)
+        # Unlock all zip attachments in mail
+        transformed = false
+
+        self.attachments.each do |attachment|
+          next unless attachment.filename =~ /\.zip$/i
+
+          zip = Glima::Zip.new(attachment.body.decoded)
+          # try all passwords
+          if zip.unlock_password!(password_candidates, logger)
+            attachment.body = zip.to_decrypted_unicode_zip.to_base64
+            attachment.content_transfer_encoding = "base64"
+            transformed = true
+          end
+        end
+        return transformed
+      end
+
+      def format_summary(count = nil)
+        date = Time.at(internal_date.to_i/1000).strftime("%m/%d %H:%M")
+        count = if count then ("%4d " % count) else "" end
+        return "#{count}#{date} #{id} #{CGI.unescapeHTML(snippet)[0..30]}"
+      end
+
+      def format_mew(count = nil)
+        date = Time.at(internal_date.to_i/1000).strftime("%m/%d ")
+
+        mark1 = " "
+        mark1 = "U" if label_ids.include?("UNREAD")
+
+        mark2 = " "
+        mark2 = "-" if content_type =~ /multipart\/alternative/
+        mark2 = "M" unless attachments.empty?
+
+        folder = File.expand_path("~/Mail/all") # XXX
+
+        summary = "#{mark1}#{mark2}#{date} #{CGI.unescapeHTML(snippet)}"
+        summary += "\r +#{folder} #{id} <#{id}>"
+        summary += if id != thread_id then " <#{thread_id}>" else " " end
+
+        return summary + " 1 2"
+      end
+
       private
 
       def part_to_plain_text(part)
