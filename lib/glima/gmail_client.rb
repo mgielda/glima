@@ -146,6 +146,23 @@ module Glima
       @imap.wait(label)
     end
 
+    def watch(label = nil, &block)
+      loop do
+        puts "tick"
+
+        curr_hid = get_user_profile(me).history_id.to_i
+        last_hid ||= curr_hid
+
+        # FIXME: if server is changed at this point, we will miss the event.
+        wait(label) if last_hid == curr_hid
+
+        each_events(since: last_hid) do |ev|
+          yield ev
+          last_hid = ev.history_id.to_i
+        end
+      end
+    end
+
     def each_events(since:)
       options, response = {start_history_id: since}, nil
 

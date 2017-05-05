@@ -42,39 +42,18 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: watch
   ################################################################
-  desc "watch", "Watch gmail server and report."
+  desc "watch LABEL", "Watch gmail server and report."
 
-
-  def watch
-    begin
-      response = client.get_user_profile('me')
-      current_history_id = response.history_id.to_i
-      last_history_id ||= current_history_id
-
-      puts "current: #{current_history_id}"
-
-      if current_history_id > last_history_id
-        puts "current: #{current_history_id} > last: #{last_history_id}"
-
-        res = client.list_user_histories('me', {start_history_id: last_history_id})
-        puts "res.history_id: #{res.history_id}"
-
-        if res.history
-          res.history.each do |h|
-            history = Glima::Resource::History.new(h)
-            puts history.dump
-            last_history_id = h.id.to_i
-          end
-        else
-          last_history_id = res.history_id.to_i # update gap
-          shell.say("No history, update to #{last_history_id}", :red)
-        end
+  def watch(label = nil)
+    client.watch(label) do |ev|
+      puts "Get event #{ev}"
+      if ev.message.label_ids.map {|id| label_id_to_name(id)}.member?("glima/queue")
+        options[:add_dst_labels] = "glima/decrypted"
+        options[:del_dst_labels] = "glima/queue"
+        options[:del_src_labels] = "glima/queue"
+        xzip(ev.message.id)
       end
-
-      # sleep if current history Id is up-to-date
-      client.wait if current_history_id == last_history_id
-
-    end while true
+    end
   end
 
   ################################################################
@@ -548,6 +527,13 @@ class GlimaCLI < Glima::Cli
     match = @all_labels.find {|label| label.name == label_name}
     error_and_exit("No label found '#{label_name}'") unless match
     return match.id
+  end
+
+  def label_id_to_name(label_id)
+    @all_labels ||= client.list_user_labels('me').labels
+    match = @all_labels.find {|label| label.id == label_id}
+    error_and_exit("No label found '#{label_name}'") unless match
+    return match.name
   end
 
   def unlock_zip_mail!(zip_mail, additional_passwords = [])
