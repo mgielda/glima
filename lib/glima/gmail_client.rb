@@ -143,7 +143,7 @@ module Glima
     # label == nil means "[Gmail]/All Mail"
     def wait(label = nil)
       @imap ||= Glima::ImapWatch.new("imap.gmail.com", @client.authorization)
-      @imap.wait(label)
+      @imap.wait(label&.name)
     end
 
     def watch(label = nil, &block)

@@ -45,14 +45,15 @@ class GlimaCLI < Glima::Cli
   desc "watch LABEL", "Watch gmail server and report."
 
   def watch(label = nil)
+    label = parse_label_names(label).first
+
     client.watch(label) do |ev|
-      puts "Get event #{ev}"
-      if ev.message.label_ids.map {|id| label_id_to_name(id)}.member?("glima/queue")
-        Glima::Command::Xzip.new(client, logger, ev.message.id,
-                          add_dst_labels: "glima/decrypted",
-                          del_dst_labels: "glima/queue",
-                          del_src_labels: "glima/queue")
-      end
+      target = if label then "label:#{label.name}" else ev.message.id end
+      logger.info "Xzip #{target}"
+      Glima::Command::Xzip.new(client, logger, target,
+                               add_dst_labels: parse_label_names("glima/decrypted"),
+                               del_dst_labels: parse_label_names("glima/queue"),
+                               del_src_labels: parse_label_names("glima/queue"))
     end
   end
 
