@@ -40,202 +40,15 @@ class GlimaCLI < Glima::Cli
   named_option :query,      :desc => "Filter messages by QUERY"
 
   ################################################################
-  # Command: watch
+  # Command: dezip
   ################################################################
-  desc "watch LABEL", "Watch gmail server and report."
+  desc "dezip GM_MSGID DIRECTORY", "Decrypt zip found in GM_MSGID to DIRECTORY"
 
-  def watch(label = nil)
-    label = parse_label_names(label).first
+  method_option :zip_passwords_file, :desc => "Set additional password-list file."
 
-    client.watch(label) do |ev|
-      target = if label then "label:#{label.name}" else ev.message.id end
-      logger.info "Xzip #{target}"
-      Glima::Command::Xzip.new(client, logger, target,
-                               add_dst_labels: parse_label_names("glima/decrypted"),
-                               del_dst_labels: parse_label_names("glima/queue"),
-                               del_src_labels: parse_label_names("glima/queue"))
-    end
-  end
-
-  ################################################################
-  # Command: push
-  ################################################################
-  desc "push EMAIL_FILE", "Push EMAIL_FILE to INBOX"
-
-  method_option :date,   :desc => "Set date source", :enum => %w(time header)
-  method_option :thread, :desc => "Set thread Id"
-  method_option :label,  :desc => "List of label names to add separated by comma"
-
-  def push(email_file)
-    labels = options[:label]&.split(/ *, */) || []
-    label_ids = client.list_user_labels('me').labels.find_all {|lbl| labels.member?(lbl.name)}.map(&:id)
-    label_ids += ["INBOX", "UNREAD"]
-    thid = options[:thread] || nil
-    date = if options[:date] == "header" then "dateHeader" else "receivedTime" end
-
-    File.open(email_file) do |source|
-      client.insert_user_message(
-        'me',
-        Google::Apis::GmailV1::Message.new(label_ids: label_ids, thread_id: thid),
-        content_type: "message/rfc822",
-        internal_date_source: date,
-        upload_source: source) do |msg, err|
-        if msg
-          puts "pushed to: #{msg.id}"
-        else
-          STDERR.puts "Error: #{err}"
-        end
-      end
-    end
-  end
-
-  ################################################################
-  # Command: xzip
-  ################################################################
-  desc "xzip TARGET", "Transform zip-attachments in TARGET and transmit to Gmail."
-
-  method_option :add_src_labels, :desc => "Add labels to source",        :banner => "LABEL,..."
-  method_option :add_dst_labels, :desc => "Add labels to destination",   :banner => "LABEL,..."
-  method_option :del_src_labels, :desc => "Del labels from source",      :banner => "LABEL,..."
-  method_option :del_dst_labels, :desc => "Del labels from destination", :banner => "LABEL,..."
-
-  def xzip(target)
-    Glima::Command::Xzip.new(client, logger, target,
-                             add_src_labels: parse_label_names(options[:add_src_labels]),
-                             del_src_labels: parse_label_names(options[:del_src_labels]),
-                             add_dst_labels: parse_label_names(options[:add_dst_labels]),
-                             del_dst_labels: parse_label_names(options[:del_dst_labels]))
-  end
-
-  ################################################################
-  # Command: labels
-  ################################################################
-  desc "labels", "List labels"
-
-  method_option :verbose, :desc => "Show verbose information for each label.", :type => :boolean
-
-  def labels
-    response = client.list_user_labels('me')
-    puts 'No labels found' if response.labels.empty?
-
-    all_ids = response.labels.map(&:id)
-    total = all_ids.length
-
-    unless options[:verbose]
-      response.labels.sort_by(&:name).each do |label|
-        # puts "(\"#{label.id}\" . \"#{label.name}\")"
-        puts "#{label.name}"
-      end
-      return 0
-    end
-
-    # Gmail API has rate limit at 250 requests/seccond/user (deps on type of method)
-    # https://developers.google.com/gmail/api/v1/reference/quota
-    # labels.get consumes 1quota unit
-    # It is only an experiment, not practical...
-    #
-    # how to retry batch requests? Issue #444 google/google-api-ruby-client
-    # https://github.com/google/google-api-ruby-client/issues/444
-    # Setting default option should also work, but it has to be done before the service is created.
-    #
-    # Retries on individual operations within a batch isn't yet
-    # supported. It's a bit complicated to do that correctly
-    # (e.g. extract the failed requests/responses, build a new batch,
-    # retry, repeat... merge all the results...)
-    #
-    # I'd caution against using retries with batches unless you know
-    # the operations are safe to repeat. Since the entire batch is
-    # repeated, you may be replaying successful operations as part of
-    # it.
-    #
-    index = 1
-    all_ids.each_slice(100) do |ids|
-      client.batch do |batch_client|
-        ids.each do |id|
-          batch_client.get_user_label(id) do |label, err|
-            if label
-              puts "--- #{index}/#{total} -------------------------------------------------"
-              puts Glima::Resource::Label.new(label).dump
-              index += 1
-            else
-              puts "Error: #{err}"
-            end
-          end
-        end # ids
-      end # batch
-      sleep 1
-    end
-  end
-
-  ################################################################
-  # Command: label
-  ################################################################
-  desc "label GM_MSGID", "Add/Remove labels to/from GM_MSGID"
-
-  method_option :add, :desc => "List of label names to add separated by comma"
-  method_option :del, :desc => "List of label names to del separated by comma"
-
-  def label(message_id)
-    req = {}
-
-    req[:add_label_ids]    = parse_label_names(options[:add]).map(&:id) if options[:add]
-    req[:remove_label_ids] = parse_label_names(options[:del]).map(&:id) if options[:del]
-
-    if req.empty?
-      puts "Do nothing."
-      return 0
-    end
-
-    req = Google::Apis::GmailV1::ModifyMessageRequest.new(req)
-
-    client.modify_message('me', message_id, req) do |res,err|
-      if res
-        puts "Update #{message_id} successfully."
-      else
-        puts "Error: #{err}"
-      end
-    end
-  end
-
-  ################################################################
-  # Command: trash
-  ################################################################
-  desc "trash GM_MSGID ...", "Move messages to trash"
-
-  def trash(*message_ids)
-    if message_ids.empty?
-      puts "Do nothing."
-      return 0
-    end
-
-    client.batch do |batch_client|
-      message_ids.each do |id|
-        batch_client.trash_user_message(id) do |res, err|
-          if res
-            puts "Trash #{id} successfully."
-          else
-            puts "Error: #{err}"
-          end
-        end
-      end
-    end
-  end
-
-  ################################################################
-  # Command: profile
-  ################################################################
-  desc "profile", "Show user's profile."
-
-  def profile
-    # while true
-      response = client.get_user_profile('me')
-      puts "emailAddress: #{response.email_address}"
-      puts "messagesTotal: #{response.messages_total}"
-      puts "threadsTotal: #{response.threads_total}"
-      puts "historyId: #{response.history_id}"
-    #   STDOUT.flush
-    #   _dummy = STDIN.gets
-    # end
+  def dezip(gmail_id, directory)
+    password_file = options[:password_file] || config.general.zip_passwords_file
+    Glima::Command::Dezip.new(client, logger, gmail_id, directory, password_file)
   end
 
   ################################################################
@@ -250,87 +63,81 @@ class GlimaCLI < Glima::Cli
   end
 
   ################################################################
-  # Command: history
+  # Command: guess
   ################################################################
-  desc "history LAST_HISTORY_ID", "List operation history since LAST_HISTORY_ID."
+  desc "guess GM_MSGID", "Guess labels to add to GM_MSGID"
 
-  def history(last_history_id)
-    response = nil
-    next_page_token = nil
-
-    begin
-      opt = {start_history_id: last_history_id}
-      opt[:page_token] = next_page_token if next_page_token
-
-      client.list_user_histories('me', opt) do |res, err|
-        if err
-          STDERR.puts "Error: #{err}"
-          exit 1
-        end
-        response = res
-      end
-      next_page_token = response.next_page_token
-
-      puts "nextPageToken: #{next_page_token}"
-      plus = next_page_token ? "+" : ""
-
-      unless response.history
-        puts "No records since #{last_history_id}."
-        return 0
-      end
-
-      puts "#{response.history.length}#{plus} historie(s):"
-
-      response.history.each do |h|
-        history = Glima::Resource::History.new(h)
-        puts history.dump
-      end
-    end while next_page_token
+  def guess(message_id)
+    Glima::Command::Guess.new(client, logger, message_id)
   end
 
   ################################################################
-  # Command: dezip
+  # Command: label
   ################################################################
-  desc "dezip GM_MSGID DIRECTORY", "Decrypt zip found in GM_MSGID to DIRECTORY"
+  desc "label GM_MSGID", "Add/Remove labels to/from GM_MSGID"
 
-  method_option :zip_passwords_file, :desc => "Set additional password-list file."
+  method_option :add, :desc => "List of label names to add separated by comma"
+  method_option :del, :desc => "List of label names to del separated by comma"
 
-  def dezip(gmail_id, directory)
-    unless File.writable?(File.expand_path(directory))
-      logger.error "#{directory} is not writable."
-      exit 1
-    end
+  def label(message_id)
+    add = parse_label_names(options[:add])
+    del = parse_label_names(options[:del])
+    Glima::Command::Label.new(client, logger, message_id, add, del)
+  end
 
-    mail = client.get_user_smart_message(gmail_id) do |m, err|
-      exit_if_error(gmail_id, err, logger)
-    end
+  ################################################################
+  # Command: labels
+  ################################################################
+  desc "labels", "List labels"
 
-    # get password candidates from config file
-    password_candidates = []
-    pfile = config.general.zip_passwords_file || options[:password_file]
-    if File.exists?(pfile)
-      password_candidates += File.open(pfile) {|f| f.read.split(/\n+/) }
-    end
+  method_option :verbose, :desc => "Show verbose information for each label.", :type => :boolean
 
-    # gather password candidates from nearby mails
-    client.nearby_mails(mail) do |nm|
-      logger.info "Passwordish mail: " + nm.format_summary
-      password_candidates += nm.find_passwordish_strings
-    end
+  def labels
+    Glima::Command::Labels.new(client, logger, options[:verbose])
+  end
 
-    # try to unlock zip attachments
-    unless mail.unlock_zip!(password_candidates, logger)
-      logger.info "Password unlock failed."
-      return false
-    end
+  ################################################################
+  # Command: open
+  ################################################################
+  desc "open GM_MSGID", "Open article in browser by GM_MSGID"
 
-    # Write to unlocked zip file to DIRECTORY
-    mail.attachments.each do |attachment|
-      next unless attachment.filename =~ /\.zip$/i
-      zip_filename = File.expand_path(attachment.filename, directory)
-      Glima::Zip.new(attachment.body.decoded).write_to_file(zip_filename)
-      logger.info "Wrote to #{zip_filename || 'STDOUT'}."
-    end
+  def open(id)
+    Launchy.open("https://mail.google.com/mail/u/1/#all/#{id}")
+  end
+
+  ################################################################
+  # Command: profile
+  ################################################################
+  desc "profile", "Show user's profile."
+
+  def profile
+    Glima::Command::Profile.new(client, logger)
+  end
+
+  ################################################################
+  # Command: push
+  ################################################################
+  desc "push EMAIL_FILE", "Push EMAIL_FILE to INBOX"
+
+  method_option :date,   :desc => "Set date source", :enum => %w(time header)
+  method_option :thread, :desc => "Set thread Id"
+  method_option :label,  :desc => "List of label names to add separated by comma"
+
+  def push(email_file)
+    labels = parse_label_names(options[:label])
+    date = if options[:date] == "header" then "dateHeader" else "receivedTime" end
+    Glima::Command::Push.new(client, logger, email_file, date, options[:thread], labels)
+  end
+
+  ################################################################
+  # Command: relabel
+  ################################################################
+  desc "relabel OLD_NAME NEW_NAME", "Rename label OLD_NAME to NEW_NAME."
+
+  expand_option :dry_run
+
+  def relabel(source_name, dest_name)
+    Glima::Command::Relabel.new(client, logger, source_name, dest_name, options[:dry_run])
   end
 
   ################################################################
@@ -338,18 +145,11 @@ class GlimaCLI < Glima::Cli
   ################################################################
   desc "scan +FOLDER SEARCH_OR_RANGE", "Scan mails in FOLDER with SEARCH_OR_RANGE."
 
-  method_option :mew, :desc => "Make Mew virtual-summary buffer", :type => :boolean
+  method_option :format, :desc => "Set printing format", :enum => %w(mew text)
 
   def scan(folder, search_or_range = nil)
-    index = 1
-    client.scan_batch(folder, search_or_range) do |mail|
-      if options[:mew]
-        puts mail.format_mew(index)
-      else
-        puts mail.format_summary(index)
-      end
-      index += 1
-    end
+    format = options[:format].to_s.to_sym
+    Glima::Command::Scan.new(client, logger, folder, format, search_or_range)
   end
 
   ################################################################
@@ -372,105 +172,43 @@ class GlimaCLI < Glima::Cli
   end
 
   ################################################################
-  # Command: open
+  # Command: trash
   ################################################################
-  desc "open GM_MSGID", "Open article in browser by GM_MSGID"
+  desc "trash GM_MSGID ...", "Move messages to trash"
 
-  def open(id)
-    Launchy.open("https://mail.google.com/mail/u/1/#all/#{id}")
+  def trash(*message_ids)
+    if message_ids.empty?
+      puts "Do nothing."
+      return 0
+    end
+    Glima::Command::Trash.new(client, logger, message_ids)
   end
 
   ################################################################
-  # Command: guess
+  # Command: watch
   ################################################################
-  desc "guess GM_MSGID", "Guess labels to add to GM_MSGID"
+  desc "watch LABEL", "Watch gmail server and report."
 
-  def guess(message_id)
-    fmt = "minimal"
-    user_label_ids = []
-
-    msg = client.get_user_message('me', message_id, format: fmt)
-    thr = client.get_user_thread('me', msg.thread_id, format: fmt)
-
-    thr.messages.each do |tmsg|
-      # puts tmsg.snippet
-      tmsg.label_ids.each do |label_id|
-        next unless label_id =~ /^Label_\d+$/
-        user_label_ids << label_id unless user_label_ids.member?(label_id)
-        puts "#{tmsg.id} -> #{label_id}"
-      end
-    end
-
-    user_label_ids.each do |label_id|
-      label = client.get_user_label(label_id)
-      puts "#{label_id} -> #{label.name}"
-    end
+  def watch(label = nil)
+    Glima::Command::Watch.new(client, logger, label)
   end
 
   ################################################################
-  # Command: relabel
+  # Command: xzip
   ################################################################
-  desc "relabel OLD_NAME NEW_NAME", "Rename label OLD_NAME to NEW_NAME."
+  desc "xzip TARGET", "Transform zip-attachments in TARGET and transmit to Gmail."
 
-  expand_option :dry_run
+  method_option :add_src_labels, :desc => "Add labels to source",        :banner => "LABEL,..."
+  method_option :add_dst_labels, :desc => "Add labels to destination",   :banner => "LABEL,..."
+  method_option :del_src_labels, :desc => "Del labels from source",      :banner => "LABEL,..."
+  method_option :del_dst_labels, :desc => "Del labels from destination", :banner => "LABEL,..."
 
-  def relabel(source_name, dest_name)
-    client = Glima::GmailClient.new(config.general, self).client
-
-    all_labels = client.list_user_labels('me').labels.sort_by(&:name)
-
-    if /\/$/ =~ dest_name
-      move_to_dir = true
-      dest_name = dest_name.sub(/\/$/, '')
-    else
-      move_to_dir = false
-    end
-
-    source_labels = all_labels.find_all {|x| File.fnmatch(source_name, x.name, File::FNM_PATHNAME)}
-    dest_label    = all_labels.find {|x| x.name == dest_name}
-
-    if source_labels.empty?
-      puts "Error: source #{source_name} not found"
-      return nil
-    end
-
-    if dest_label && !move_to_dir
-      puts "Error: dest #{dest_name} already exists"
-      return nil
-    end
-
-    if !dest_label && move_to_dir
-      puts "Error: dest #{dest_name} not found"
-      return nil
-    end
-
-    source_labels.each do |source_label|
-      dirtop = File.dirname(source_label.name)
-      sub_labels = all_labels.find_all {|x| File.fnmatch(source_label.name + '/*', x.name)}
-
-      ([source_label] + sub_labels).each do |label|
-        src = label.name
-        dst = dest_name + '/' + (label.name.sub(/^#{dirtop}\//, ''))
-
-        if all_labels.find {|x| x.name == dst}
-          puts "Error: relabel #{src} -> #{dst}: Destination already exists"
-          next
-        else
-          puts "relabel #{src} -> #{dst}"
-        end
-
-        unless options[:dry_run]
-          label_obj = Google::Apis::GmailV1::Label.new(id: label.id, name: dst)
-          client.patch_user_label('me', label.id, label_obj) do |response, err|
-            if response
-              # puts dump_label(response)
-            else
-              puts "Error: #{err}"
-            end
-          end
-        end
-      end
-    end
+  def xzip(target)
+    Glima::Command::Xzip.new(client, logger, target,
+                             add_src_labels: parse_label_names(options[:add_src_labels]),
+                             del_src_labels: parse_label_names(options[:del_src_labels]),
+                             add_dst_labels: parse_label_names(options[:add_dst_labels]),
+                             del_dst_labels: parse_label_names(options[:del_dst_labels]))
   end
 
   ################################################################
@@ -478,24 +216,18 @@ class GlimaCLI < Glima::Cli
 
   private
 
-  def exit_if_error(message, error, logger)
-    return true unless error
-    logger.error "#{error.message.split(':').last.strip} #{message}."
-    exit 1
-  end
-
   def error_and_exit(message)
     STDERR.puts message
     exit 1
   end
 
   def parse_label_names(label_names)
-    (label_names&.split(/ *, */) || [])
-      .map {|label_name| client.label_by_name(label_name)}
-  end
-
-  def store_page_token(page_token)
-    context.save_page_token(page_token)
+    (label_names&.split(/ *, */) || []).map do |name|
+      unless label = client.label_by_name(name)
+        error_and_exit("No label named #{name}")
+      end
+      label
+    end
   end
 
   attr_reader :builder, :config, :client, :context, :logger

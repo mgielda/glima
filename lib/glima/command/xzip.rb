@@ -1,14 +1,13 @@
 module Glima
   module Command
-    class Xzip
+    class Xzip < Base
       def initialize(client, logger, target,
                      add_src_labels: [],
                      del_src_labels: [],
                      add_dst_labels: [],
                      del_dst_labels: [])
 
-        @client = client
-        @logger = logger
+        super(client, logger)
 
         add_src_label_ids = add_src_labels.map(&:id)
         del_src_label_ids = del_src_labels.map(&:id)
@@ -71,14 +70,6 @@ module Glima
       end # def initialize
 
       private
-
-      def logger
-        @logger
-      end
-
-      def client
-        @client
-      end
 
       def push_mail(mail, date_source = "receivedTime", add_label_ids = [], del_label_ids = [])
         label_ids = (mail.label_ids +
