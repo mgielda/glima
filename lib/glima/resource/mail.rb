@@ -40,14 +40,7 @@ module Glima
       end
 
       def to_plain_text
-        mail = self
-        parts = if mail.multipart? then mail.parts else [mail] end
-
-        body = parts.map do |part|
-          part_to_plain_text(part)
-        end.join("-- PART ---- PART ---- PART ---- PART ---- PART --\n")
-
-        return pretty_hearder + "\n" + body
+        mail_to_plain_text(self)
       end
 
       def find_passwordish_strings
@@ -108,6 +101,16 @@ module Glima
 
       private
 
+      def mail_to_plain_text(mail)
+        parts = if mail.multipart? then mail.parts else [mail] end
+
+        body = parts.map do |part|
+          part_to_plain_text(part)
+        end.join("-- PART ---- PART ---- PART ---- PART ---- PART --\n")
+
+        return pretty_hearder + "\n" + body
+      end
+
       def part_to_plain_text(part)
         case part.content_type
         when /text\/plain/
@@ -115,6 +118,10 @@ module Glima
                           part.content_type_parameters["charset"])
         when /multipart\/alternative/
           part_to_plain_text(part.text_part)
+
+        when /message\/rfc822/
+          mail_to_plain_text(::Mail.new(part.body.decoded.to_s))
+
         else
           "NOT_TEXT_PART (#{part.content_type})\n"
         end
