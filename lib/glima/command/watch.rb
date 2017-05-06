@@ -2,18 +2,42 @@ module Glima
   module Command
     class Watch < Base
 
-      def initialize(client, logger, label = nil)
+      def initialize(client, logger, queue_label = nil, mark_label = nil)
         super(client, logger)
 
-        label = parse_label_names(label).first
+        # Watch "[Gmail]/All Mail" by IMAP idle
+        client.watch(nil) do |ev|
+          next unless ev.type == :added
 
-        client.watch(label) do |ev|
-          target = if label then "label:#{label.name}" else ev.message.id end
+          # Scan messages in queue_label or new message itself.
+          #
+          # If Xzip process is successful, remove queue_label
+          # from the source message.
+          #
+          if queue_label
+            target      = "label:#{queue_label.name}"
+            target     += " -label:#{mark_label.name}" if mark_label
+            del_labels  = [queue_label]
+          else
+            target      = ev.message.id
+            del_labels  = []
+          end
+
+          # Also, mark_label will be added to the xzipped message.
+          # It is for avoidance of infinite loop.
+          #
+          if mark_label
+            add_labels = [mark_label]
+          else
+            add_labels = []
+          end
+
           logger.info "Xzip #{target}"
+
           Glima::Command::Xzip.new(client, logger, target,
-                                   add_dst_labels: parse_label_names("glima/decrypted"),
-                                   del_dst_labels: parse_label_names("glima/queue"),
-                                   del_src_labels: parse_label_names("glima/queue"))
+                                   add_dst_labels: add_labels,
+                                   del_dst_labels: del_labels,
+                                   del_src_labels: del_labels)
         end
       end
 

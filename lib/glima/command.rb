@@ -16,6 +16,7 @@ module Glima
     autoload :Scan,        "#{dir}/scan.rb"
     # autoload :Show,        "#{dir}/show.rb"
     autoload :Trash,       "#{dir}/trash.rb"
+    autoload :Watch,       "#{dir}/watch.rb"
     autoload :Xzip,        "#{dir}/xzip.rb"
 
   end # module Command

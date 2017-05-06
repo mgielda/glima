@@ -187,10 +187,12 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: watch
   ################################################################
-  desc "watch LABEL", "Watch gmail server and report."
+  desc "watch QUEUE_LABEL", "Watch gmail server and xzip."
 
-  def watch(label = nil)
-    Glima::Command::Watch.new(client, logger, label)
+  def watch(queue_label, mark_label)
+    queue_label = parse_label_names(queue_label).first
+    mark_label  = parse_label_names(mark_label).first
+    Glima::Command::Watch.new(client, logger, queue_label, mark_label)
   end
 
   ################################################################
