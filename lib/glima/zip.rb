@@ -22,7 +22,8 @@ module Glima
           # and no error is emitted even with wrong password.
           while entry = zip.get_next_entry
             size = zip.read.size # Exception if invalid password
-            return true if size > 0 && size == entry.size
+            return false if size != entry.size
+            return true  if size > 0 # short cut
           end
         rescue Zlib::DataError => e
           puts "*** #{e} ***" if $DEBUG
