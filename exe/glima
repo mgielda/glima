@@ -42,7 +42,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: dezip
   ################################################################
-  desc "dezip GM_MSGID DIRECTORY", "Decrypt zip found in GM_MSGID to DIRECTORY"
+  desc "dezip MSGID DIRECTORY", "Decrypt zip found in MSGID to DIRECTORY"
 
   method_option :zip_passwords_file, :desc => "Set additional password-list file."
 
@@ -65,7 +65,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: guess
   ################################################################
-  desc "guess GM_MSGID", "Guess labels to add to GM_MSGID"
+  desc "guess MSGID", "Guess labels to add to MSGID"
 
   def guess(message_id)
     Glima::Command::Guess.new(client, logger, message_id)
@@ -74,7 +74,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: label
   ################################################################
-  desc "label GM_MSGID", "Add/Remove labels to/from GM_MSGID"
+  desc "label MSGID", "Add/Remove labels to/from MSGID"
 
   method_option :add, :desc => "List of label names to add separated by comma"
   method_option :del, :desc => "List of label names to del separated by comma"
@@ -99,7 +99,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: open
   ################################################################
-  desc "open GM_MSGID", "Open article in browser by GM_MSGID"
+  desc "open MSGID", "Open article in browser by MSGID"
 
   def open(id)
     Launchy.open("https://mail.google.com/mail/u/1/#all/#{id}")
@@ -132,7 +132,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: relabel
   ################################################################
-  desc "relabel OLD_NAME NEW_NAME", "Rename label OLD_NAME to NEW_NAME."
+  desc "relabel SOURCE TARGET", "Rename label SOURCE to TARGET."
 
   expand_option :dry_run
 
@@ -143,7 +143,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: scan
   ################################################################
-  desc "scan +FOLDER SEARCH_OR_RANGE", "Scan mails in FOLDER with SEARCH_OR_RANGE."
+  desc "scan +FOLDER [QUERY]", "Scan FOLDER with QUERY."
 
   method_option :format, :desc => "Set printing format", :enum => %w(mew text)
 
@@ -155,7 +155,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: show
   ################################################################
-  desc "show GM_MSGID", "Show article by GM_MSGID."
+  desc "show MSGID", "Show article."
 
   method_option :raw, :desc => "Cat raw mail article.", :type => :boolean
 
@@ -174,7 +174,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: trash
   ################################################################
-  desc "trash GM_MSGID ...", "Move messages to trash"
+  desc "trash MSGID ...", "Move messages to trash"
 
   def trash(*message_ids)
     if message_ids.empty?
@@ -187,7 +187,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   # Command: watch
   ################################################################
-  desc "watch QUEUE_LABEL", "Watch gmail server and xzip."
+  desc "watch [LABEL]", "Watch gmail server and xzip."
 
   def watch(queue_label, mark_label)
     queue_label = parse_label_names(queue_label).first
