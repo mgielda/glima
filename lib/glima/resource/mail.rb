@@ -12,7 +12,7 @@ module Glima
       :snippet
 
       def self.read(mail_filename)
-        new(File.open(filename, 'rb') {|f| f.read })
+        new(File.open(mail_filename, 'rb') {|f| f.read })
       end
 
       def initialize(message)
