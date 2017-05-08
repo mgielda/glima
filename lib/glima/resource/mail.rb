@@ -106,7 +106,7 @@ module Glima
 
         body = parts.map do |part|
           part_to_plain_text(part)
-        end.join("-- PART ---- PART ---- PART ---- PART ---- PART --\n")
+        end.join("----PART----PART----PART----PART----PART----\n")
 
         return pretty_hearder + "\n" + body
       end
