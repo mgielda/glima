@@ -100,7 +100,7 @@ module Glima
       password = password.to_s
       score = Math.log2(password.length + 1)
 
-      password.scan(/[a-z]+|[A-Z]+|\d+|[!,@#$%^&*?_~]+/) do |s|
+      password.scan(/[a-z]+|[A-Z]+|\d+|[!"#$%&'()*+,-.\/:;<=>?@\[\\\]^_`{|}~]+/) do |s|
         score += 1.0
       end
       return score
