@@ -16,27 +16,31 @@ module Glima
       end
 
       def initialize(message)
-        @gmail_message = message
-        super(message.raw)
+        if message.respond_to?(:raw)
+          @gmail_message = message
+          super(message.raw)
+        else
+          super(message)
+        end
       end
 
       def gm_msgid
-        @gmail_message.id
+        @gmail_message&.id
       end
       alias_method :id, :gm_msgid
 
       def gm_thrid
-        @gmail_message.thread_id
+        @gmail_message&.thread_id
       end
       alias_method :thread_id, :gm_thrid
 
       def gm_label_ids
-        @gmail_message.label_ids
+        @gmail_message&.label_ids
       end
       alias_method :label_ids, :gm_label_ids
 
       def raw
-        @gmail_message.raw
+        @gmail_message&.raw
       end
 
       def to_plain_text
