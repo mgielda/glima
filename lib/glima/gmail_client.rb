@@ -43,6 +43,14 @@ module Glima
   end # Authorizer
 
   class GmailClient
+    def self.logger
+      Google::Apis.logger
+    end
+
+    def self.logger=(logger)
+      Google::Apis.logger = logger
+    end
+
     extend Forwardable
 
     def_delegators :@client,
@@ -116,7 +124,7 @@ module Glima
       }.map(&:addr).map(&:ip_address).length > 0
     end
 
-    def initialize(config, datastore, logger = nil)
+    def initialize(config, datastore)
       authorizer = Authorizer.new(config.client_id,
                                   config.client_secret,
                                   Google::Apis::GmailV1::AUTH_SCOPE,
@@ -129,13 +137,6 @@ module Glima
       @client.client_options.application_name = 'glima'
       @client.authorization = credentials
       @client.authorization.username = config.default_user # for IMAP
-
-      if logger
-        @logger = logger
-      else
-        @logger = ::Logger.new($stderr)
-        @logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
-      end
 
       return @client
     end

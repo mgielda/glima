@@ -2,8 +2,8 @@ module Glima
   module Command
     class Label < Base
 
-      def initialize(client, logger, message_id, add, del)
-        super(client, logger)
+      def initialize(client, message_id, add, del)
+        super(client)
 
         req = {}
         req[:add_label_ids]    = add.map(&:id) unless add.empty?

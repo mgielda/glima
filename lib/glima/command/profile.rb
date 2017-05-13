@@ -2,8 +2,8 @@ module Glima
   module Command
     class Profile < Base
 
-      def initialize(client, logger)
-        super(client, logger)
+      def initialize(client)
+        super(client)
         response = client.get_user_profile('me')
         puts "emailAddress: #{response.email_address}"
         puts "messagesTotal: #{response.messages_total}"

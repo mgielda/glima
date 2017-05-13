@@ -2,8 +2,8 @@ module Glima
   module Command
     class Relabel < Base
 
-      def initialize(client, logger, source_name, dest_name, dry_run)
-        super(client, logger)
+      def initialize(client, source_name, dest_name, dry_run)
+        super(client)
 
         all_labels = client.list_user_labels('me').labels.sort_by(&:name)
 

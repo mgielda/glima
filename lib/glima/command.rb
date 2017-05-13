@@ -1,6 +1,14 @@
 module Glima
   module Command
 
+    def self.logger
+      @logger
+    end
+
+    class << self
+      attr_writer :logger
+    end
+
     dir = File.dirname(__FILE__) + "/command"
 
     autoload :Base,        "#{dir}/base.rb"

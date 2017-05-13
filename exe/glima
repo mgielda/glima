@@ -48,7 +48,7 @@ class GlimaCLI < Glima::Cli
 
   def dezip(gmail_id, directory)
     password_file = options[:password_file] || config.general.zip_passwords_file
-    Glima::Command::Dezip.new(client, logger, gmail_id, directory, password_file)
+    Glima::Command::Dezip.new(client, gmail_id, directory, password_file)
   end
 
   ################################################################
@@ -68,7 +68,7 @@ class GlimaCLI < Glima::Cli
   desc "guess MSGID", "Guess labels to add to MSGID"
 
   def guess(message_id)
-    Glima::Command::Guess.new(client, logger, message_id)
+    Glima::Command::Guess.new(client, message_id)
   end
 
   ################################################################
@@ -82,7 +82,7 @@ class GlimaCLI < Glima::Cli
   def label(message_id)
     add = parse_label_names(options[:add])
     del = parse_label_names(options[:del])
-    Glima::Command::Label.new(client, logger, message_id, add, del)
+    Glima::Command::Label.new(client, message_id, add, del)
   end
 
   ################################################################
@@ -93,7 +93,7 @@ class GlimaCLI < Glima::Cli
   method_option :verbose, :desc => "Show verbose information for each label.", :type => :boolean
 
   def labels
-    Glima::Command::Labels.new(client, logger, options[:verbose])
+    Glima::Command::Labels.new(client, options[:verbose])
   end
 
   ################################################################
@@ -111,7 +111,7 @@ class GlimaCLI < Glima::Cli
   desc "profile", "Show user's profile."
 
   def profile
-    Glima::Command::Profile.new(client, logger)
+    Glima::Command::Profile.new(client)
   end
 
   ################################################################
@@ -126,7 +126,7 @@ class GlimaCLI < Glima::Cli
   def push(email_file)
     labels = parse_label_names(options[:label])
     date = if options[:date] == "header" then "dateHeader" else "receivedTime" end
-    Glima::Command::Push.new(client, logger, email_file, date, options[:thread], labels)
+    Glima::Command::Push.new(client, email_file, date, options[:thread], labels)
   end
 
   ################################################################
@@ -137,7 +137,7 @@ class GlimaCLI < Glima::Cli
   expand_option :dry_run
 
   def relabel(source_name, dest_name)
-    Glima::Command::Relabel.new(client, logger, source_name, dest_name, options[:dry_run])
+    Glima::Command::Relabel.new(client, source_name, dest_name, options[:dry_run])
   end
 
   ################################################################
@@ -181,7 +181,7 @@ class GlimaCLI < Glima::Cli
       puts "Do nothing."
       return 0
     end
-    Glima::Command::Trash.new(client, logger, message_ids)
+    Glima::Command::Trash.new(client, message_ids)
   end
 
   ################################################################
@@ -192,7 +192,7 @@ class GlimaCLI < Glima::Cli
   def watch(queue_label, mark_label)
     queue_label = parse_label_names(queue_label).first
     mark_label  = parse_label_names(mark_label).first
-    Glima::Command::Watch.new(client, logger, queue_label, mark_label)
+    Glima::Command::Watch.new(client, queue_label, mark_label)
   end
 
   ################################################################
@@ -206,7 +206,7 @@ class GlimaCLI < Glima::Cli
   method_option :del_dst_labels, :desc => "Del labels from destination", :banner => "LABEL,..."
 
   def xzip(target)
-    Glima::Command::Xzip.new(client, logger, target,
+    Glima::Command::Xzip.new(client, target,
                              add_src_labels: parse_label_names(options[:add_src_labels]),
                              del_src_labels: parse_label_names(options[:del_src_labels]),
                              add_dst_labels: parse_label_names(options[:add_dst_labels]),
@@ -232,7 +232,7 @@ class GlimaCLI < Glima::Cli
     end
   end
 
-  attr_reader :builder, :config, :client, :context, :logger
+  attr_reader :builder, :config, :client, :context
 
   def setup_global_options
     exit_on_error do
@@ -241,8 +241,11 @@ class GlimaCLI < Glima::Cli
       @client = Glima::GmailClient.new(config.general, @datastore)
       @context = Glima::Context.new(File.expand_path(CONFIG_HOME))
 
-      @logger = ::Logger.new($stderr)
-      @logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
+      logger = ::Logger.new($stderr)
+      logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
+
+      Glima::Command.logger = logger
+      # Glima::GmailClient.logger = logger
 
       if options[:profile]
         require 'profiler'

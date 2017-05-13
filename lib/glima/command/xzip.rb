@@ -1,13 +1,13 @@
 module Glima
   module Command
     class Xzip < Base
-      def initialize(client, logger, target,
+      def initialize(client, target,
                      add_src_labels: [],
                      del_src_labels: [],
                      add_dst_labels: [],
                      del_dst_labels: [])
 
-        super(client, logger)
+        super(client)
 
         add_src_label_ids = add_src_labels.map(&:id)
         del_src_label_ids = del_src_labels.map(&:id)

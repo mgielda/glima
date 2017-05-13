@@ -2,8 +2,8 @@ module Glima
   module Command
     class Labels < Base
 
-      def initialize(client, logger, verbose = nil)
-        super(client, logger)
+      def initialize(client, verbose = nil)
+        super(client)
 
         labels = client.labels
 

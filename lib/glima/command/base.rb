@@ -2,15 +2,14 @@ module Glima
   module Command
     class Base
 
-      def initialize(client, logger)
+      def initialize(client)
         @client = client
-        @logger = logger
       end
 
       private
 
       def logger
-        @logger
+        Glima::Command.logger
       end
 
       def client

@@ -2,8 +2,8 @@ module Glima
   module Command
     class Push < Base
 
-      def initialize(client, logger, email_file, date, thread, labels)
-        super(client, logger)
+      def initialize(client, email_file, date, thread, labels)
+        super(client)
         label_ids = labels.map(&:id) + ["INBOX", "UNREAD"]
 
         File.open(email_file) do |source|

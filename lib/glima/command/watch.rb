@@ -2,8 +2,8 @@ module Glima
   module Command
     class Watch < Base
 
-      def initialize(client, logger, queue_label = nil, mark_label = nil)
-        super(client, logger)
+      def initialize(client, queue_label = nil, mark_label = nil)
+        super(client)
 
         # Watch "[Gmail]/All Mail" by IMAP idle
         client.watch(nil) do |ev|
