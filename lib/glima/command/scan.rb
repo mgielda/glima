@@ -2,8 +2,7 @@ module Glima
   module Command
     class Scan < Base
 
-      def initialize(client, folder, format, search_or_range)
-        super(client)
+      def initialize(folder, format, search_or_range)
 
         index = 1
         client.scan_batch(folder, search_or_range) do |mail|

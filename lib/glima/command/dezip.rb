@@ -2,8 +2,7 @@ module Glima
   module Command
     class Dezip < Base
 
-      def initialize(client, gmail_id, directory, password_file = nil, password_dir = nil)
-        super(client)
+      def initialize(gmail_id, directory, password_file = nil, password_dir = nil)
 
         unless File.writable?(File.expand_path(directory))
           logger.error "#{directory} is not writable."

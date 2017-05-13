@@ -2,10 +2,6 @@ module Glima
   module Command
     class Base
 
-      def initialize(client)
-        @client = client
-      end
-
       private
 
       def logger
@@ -13,7 +9,7 @@ module Glima
       end
 
       def client
-        @client
+        Glima::Command.client
       end
 
       def exit_if_error(message, error, logger)

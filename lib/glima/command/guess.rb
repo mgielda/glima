@@ -2,8 +2,7 @@ module Glima
   module Command
     class Guess < Base
 
-      def initialize(client, message_id)
-        super(client)
+      def initialize(message_id)
 
         fmt = "minimal"
         user_label_ids = []

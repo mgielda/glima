@@ -2,8 +2,7 @@ module Glima
   module Command
     class Trash < Base
 
-      def initialize(client, message_ids)
-        super(client)
+      def initialize(message_ids)
 
         client.batch do |batch_client|
           message_ids.each do |id|

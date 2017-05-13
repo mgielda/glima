@@ -5,8 +5,12 @@ module Glima
       @logger
     end
 
+    def self.client
+      @client
+    end
+
     class << self
-      attr_writer :logger
+      attr_writer :logger, :client
     end
 
     dir = File.dirname(__FILE__) + "/command"
