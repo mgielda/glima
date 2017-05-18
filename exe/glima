@@ -33,6 +33,11 @@ class GlimaCLI < Glima::Cli
   package_name 'GLIMA'
 
   ################################################################
+  # global option
+
+  class_option :profile,    :desc => "Set profiler flag", :type => :boolean
+
+  ################################################################
   # register frequently used options
 
   named_option :format,     :desc => "Set printing format", :enum => %w(short full metadata minimal raw mewl)
@@ -214,6 +219,18 @@ class GlimaCLI < Glima::Cli
   end
 
   ################################################################
+  # add some hooks to Thor
+
+  no_commands do
+    def invoke_command(command, *args)
+      setup_global_options unless command.name == "init"
+      result = super
+      teardown
+      result
+    end
+  end
+
+  ################################################################
   # private
 
   private
@@ -258,6 +275,12 @@ class GlimaCLI < Glima::Cli
         $GLIMA_DEBUG_FOR_DEVELOPER = true if ENV["GLIMA_DEBUG_FOR_DEVELOPER"]
       end
     end
+  end
+end
+
+def teardown
+  if options[:profile]
+    Profiler__.print_profile($stdout)
   end
 end
 
