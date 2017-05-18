@@ -9,8 +9,8 @@ Gem::Specification.new do |spec|
   spec.version       = Glima::VERSION
   spec.authors       = ["Yoshinari Nomura"]
   spec.email         = ["nom@quickhack.net"]
-  spec.summary       = %q{}
-  spec.description   = %q{}
+  spec.summary       = %q{Gmail CLI client}
+  spec.description   = %q{Gmail CLI client}
   spec.homepage      = "https://github.com/yoshinari-nomura/glima"
   spec.license       = "MIT"
 
