@@ -145,7 +145,7 @@ class GlimaCLI < Glima::Cli
   ################################################################
   desc "scan +FOLDER [QUERY]", "Scan FOLDER with QUERY."
 
-  method_option :format, :desc => "Set printing format", :enum => %w(mew text)
+  method_option :format, :desc => "Set printing format", :enum => %w(mew text archive)
 
   def scan(folder, search_or_range = nil)
     format = options[:format].to_s.to_sym
