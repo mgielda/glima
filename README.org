@@ -25,6 +25,9 @@
 # #+LaTeX: \thispagestyle{empty}
 
 * Installation
+  Glima requires Ruby 2.3 or newer.
+  It uses safe navigation operator (=&.=) introduced in Ruby 2.3.
+
   #+BEGIN_SRC sh
     $ gem install bundler
     $ mkdir /path/to/install/glima
