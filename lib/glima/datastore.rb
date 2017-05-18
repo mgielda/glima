@@ -41,7 +41,7 @@ module Glima
 
     def folder_to_directory(folder)
       folder = folder.sub(/^\+/, "")
-      File.expand_path(folder, "~/Mail")
+      File.expand_path(folder, @basedir)
     end
 
     def save_message_in_id(message, folder)
