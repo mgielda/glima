@@ -27,9 +27,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 2.3.0"
 
   spec.add_runtime_dependency "thor", ">= 0.19.1"
-  spec.add_runtime_dependency "google-api-client", ">0.9"
-  spec.add_runtime_dependency "googleauth"
-  spec.add_runtime_dependency "launchy"
+  spec.add_runtime_dependency "clian"
   spec.add_runtime_dependency "mail"
   spec.add_runtime_dependency "rubyzip"
 

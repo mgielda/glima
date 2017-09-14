@@ -23,13 +23,14 @@ if File.exists?(gemfile + ".lock")
 end
 
 require "rubygems"
+require "clian"
 require "glima"
 require "cgi"
 require "logger"
 
 Encoding.default_external="UTF-8"
 
-class GlimaCLI < Glima::Cli
+class GlimaCLI < Clian::Cli
   package_name 'GLIMA'
 
   ################################################################
