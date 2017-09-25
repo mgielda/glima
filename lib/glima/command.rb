@@ -21,6 +21,7 @@ module Glima
     autoload :Guess,       "#{dir}/guess.rb"
     autoload :Label,       "#{dir}/label.rb"
     autoload :Labels,      "#{dir}/labels.rb"
+    autoload :Init,        "#{dir}/init.rb"
     # autoload :Open,        "#{dir}/open.rb"
     autoload :Profile,     "#{dir}/profile.rb"
     autoload :Push,        "#{dir}/push.rb"

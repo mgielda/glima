@@ -79,6 +79,18 @@ class GlimaCLI < Clian::Cli
   end
 
   ################################################################
+  # Command: init
+  ################################################################
+  desc "init", "Create new config file"
+
+  expand_option :config
+
+  def init
+    config_file = options[:config] || CONFIG_PATH
+    Glima::Command::Init.new(config_file)
+  end
+
+  ################################################################
   # Command: label
   ################################################################
   desc "label MSGID", "Add/Remove labels to/from MSGID"
