@@ -124,19 +124,19 @@ module Glima
       }.map(&:addr).map(&:ip_address).length > 0
     end
 
-    def initialize(config, datastore)
+    def initialize(config, user, datastore)
       authorizer = Authorizer.new(config.client_id,
                                   config.client_secret,
                                   Google::Apis::GmailV1::AUTH_SCOPE,
                                   config.token_store_path)
 
-      credentials = authorizer.credentials(config.default_user) ||
-                    authorizer.auth_interactively(config.default_user)
+      credentials = authorizer.credentials(user) ||
+                    authorizer.auth_interactively(user)
       @datastore = datastore
       @client = Google::Apis::GmailV1::GmailService.new
       @client.client_options.application_name = 'glima'
       @client.authorization = credentials
-      @client.authorization.username = config.default_user # for IMAP
+      @client.authorization.username = user # for IMAP
 
       return @client
     end

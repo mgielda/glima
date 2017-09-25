@@ -37,6 +37,7 @@ class GlimaCLI < Clian::Cli
   # global option
 
   class_option :profile,    :desc => "Set profiler flag", :type => :boolean
+  class_option :user,       :desc => "Set Gmail/IMAP account"
 
   ################################################################
   # register frequently used options
@@ -256,7 +257,8 @@ class GlimaCLI < Clian::Cli
     exit_on_error do
       @config = Glima::Config.create_from_file(options[:config] || CONFIG_PATH)
       @datastore = Glima::DataStore.new(File.expand_path("~/Mail"))
-      @client = Glima::GmailClient.new(config.general, @datastore)
+      @user   = options[:user] || config.general.default_user
+      @client = Glima::GmailClient.new(config.general, @user, @datastore)
       @context = Glima::Context.new(File.expand_path(CONFIG_HOME))
 
       logger = ::Logger.new($stderr)
