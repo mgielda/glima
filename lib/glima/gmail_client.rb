@@ -128,7 +128,7 @@ module Glima
       authorizer = Authorizer.new(config.client_id,
                                   config.client_secret,
                                   Google::Apis::GmailV1::AUTH_SCOPE,
-                                  config.token_store)
+                                  config.token_store_path)
 
       credentials = authorizer.credentials(config.default_user) ||
                     authorizer.auth_interactively(config.default_user)

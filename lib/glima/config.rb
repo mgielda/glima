@@ -4,7 +4,7 @@ module Glima
     class General < Clian::Config::Element
       define_syntax :client_id => String,
                     :client_secret => String,
-                    :token_store => String,
+                    :token_store_path => String,
                     :context_store => String,
                     :zip_passwords_file => String,
                     :default_user => String
