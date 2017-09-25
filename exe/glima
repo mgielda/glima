@@ -47,6 +47,20 @@ class GlimaCLI < Clian::Cli
   named_option :query,      :desc => "Filter messages by QUERY"
 
   ################################################################
+  # Command: auth
+  ################################################################
+  desc "auth", "Authenticate interactively"
+
+  def auth
+    conf = config.general
+    authorizer = Clian::Authorizer.new(conf.client_id,
+                                       conf.client_secret,
+                                       Google::Apis::GmailV1::AUTH_SCOPE,
+                                       conf.token_store_path)
+    authorizer.auth_interactively(@user)
+  end
+
+  ################################################################
   # Command: dezip
   ################################################################
   desc "dezip MSGID DIRECTORY", "Decrypt zip found in MSGID to DIRECTORY"
@@ -86,7 +100,7 @@ class GlimaCLI < Clian::Cli
   expand_option :config
 
   def init
-    config_file = options[:config] || CONFIG_PATH
+    config_file = options[:config] || DEFAULT_CONFIG_PATH
     Glima::Command::Init.new(config_file)
   end
 
@@ -233,18 +247,6 @@ class GlimaCLI < Clian::Cli
   end
 
   ################################################################
-  # add some hooks to Thor
-
-  no_commands do
-    def invoke_command(command, *args)
-      setup_global_options unless command.name == "init"
-      result = super
-      teardown
-      result
-    end
-  end
-
-  ################################################################
   # private
 
   private
@@ -263,20 +265,19 @@ class GlimaCLI < Clian::Cli
     end
   end
 
-  attr_reader :builder, :config, :client, :context
+  attr_reader :builder, :config, :user, :context
 
-  def setup_global_options
+  def setup_global_options(command, *args)
     exit_on_error do
-      @config = Glima::Config.create_from_file(options[:config] || CONFIG_PATH)
+      @config = Glima::Config.create_from_file(options[:config] || DEFAULT_CONFIG_PATH) unless command.name == "init"
       @datastore = Glima::DataStore.new(File.expand_path("~/Mail"))
       @user   = options[:user] || config.general.default_user
-      @client = Glima::GmailClient.new(config.general, @user, @datastore)
-      @context = Glima::Context.new(File.expand_path(CONFIG_HOME))
+      @context = Glima::Context.new(File.expand_path(DEFAULT_CONFIG_HOME))
 
       logger = ::Logger.new($stderr)
       logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
 
-      Glima::Command.client = client
+      Glima::Command.client = client unless command.name == "auth"
       Glima::Command.logger = logger
       # Glima::GmailClient.logger = logger
 
@@ -289,6 +290,15 @@ class GlimaCLI < Clian::Cli
         $GLIMA_DEBUG = true
         $GLIMA_DEBUG_FOR_DEVELOPER = true if ENV["GLIMA_DEBUG_FOR_DEVELOPER"]
       end
+    end
+  end
+
+  def client
+    begin
+      @client ||= Glima::GmailClient.new(config.general, @user, @datastore)
+    rescue Glima::GmailClient::AuthorizationError
+      STDERR.print "Authorization Error: try ``glima auth'' command.\n"
+      exit(1)
     end
   end
 end

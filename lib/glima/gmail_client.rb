@@ -8,41 +8,9 @@ require 'forwardable'
 Google::Apis::RequestOptions.default.retries = 5
 
 module Glima
-  class Authorizer
-    def initialize(client_id, client_secret, scope, token_store_path)
-      @authorizer = Google::Auth::UserAuthorizer.new(
-        Google::Auth::ClientId.new(client_id, client_secret),
-        scope,
-        Google::Auth::Stores::FileTokenStore.new(file: token_store_path)
-      )
-    end
-
-    def credentials(user_id)
-      @authorizer.get_credentials(user_id)
-    end
-
-    def auth_interactively(user_id)
-      shell   = Thor.new.shell
-      oob_uri = "urn:ietf:wg:oauth:2.0:oob"
-
-      url = @authorizer.get_authorization_url(base_url: oob_uri)
-      begin
-        Launchy.open(url)
-      rescue
-        puts "Open URL in your browser:\n #{url}"
-      end
-
-      code = shell.ask "Enter the resulting code:"
-
-      @authorizer.get_and_store_credentials_from_code(
-        user_id:  user_id,
-        code:     code,
-        base_url: oob_uri
-      )
-    end
-  end # Authorizer
-
   class GmailClient
+    class AuthorizationError < StandardError ; end
+
     def self.logger
       Google::Apis.logger
     end
@@ -125,13 +93,15 @@ module Glima
     end
 
     def initialize(config, user, datastore)
-      authorizer = Authorizer.new(config.client_id,
+      authorizer = Clian::Authorizer.new(config.client_id,
                                   config.client_secret,
                                   Google::Apis::GmailV1::AUTH_SCOPE,
                                   config.token_store_path)
 
-      credentials = authorizer.credentials(user) ||
-                    authorizer.auth_interactively(user)
+      unless credentials = authorizer.credentials(user)
+        raise AuthorizationError.new
+      end
+
       @datastore = datastore
       @client = Google::Apis::GmailV1::GmailService.new
       @client.client_options.application_name = 'glima'
