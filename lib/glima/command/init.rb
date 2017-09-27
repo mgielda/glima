@@ -22,7 +22,6 @@ module Glima
         config[:client_id] = @shell.ask "CLIENT_ID:"
         config[:client_secret] = @shell.ask "CLIENT_SECRET:"
         config[:default_user] = @shell.ask "Gmail address:"
-        config[:token_store_path] = File.expand_path("token_store.yml", config_dir)
 
         # mkdir
         unless Dir.exist?(File.expand_path(config_dir))
