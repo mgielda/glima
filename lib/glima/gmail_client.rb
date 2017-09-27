@@ -43,6 +43,7 @@ module Glima
     # Users getProfile
     :get_user_profile
 
+    attr_reader :user
 
     # Find nearby messages from pivot_message
     # `Nearby' message:
@@ -92,23 +93,33 @@ module Glima
       }.map(&:addr).map(&:ip_address).length > 0
     end
 
-    def initialize(config, user, datastore)
-      authorizer = Clian::Authorizer.new(config.client_id,
-                                  config.client_secret,
-                                  Google::Apis::GmailV1::AUTH_SCOPE,
-                                  config.token_store_path)
-
-      unless credentials = authorizer.credentials(user)
-        raise AuthorizationError.new
-      end
-
+    def initialize(client_id, client_secret, token_store_path, user, datastore)
+      @client_id = client_id
+      @client_secret = client_secret
+      @token_store_path = token_store_path
+      @user = user
       @datastore = datastore
       @client = Google::Apis::GmailV1::GmailService.new
       @client.client_options.application_name = 'glima'
-      @client.authorization = credentials
-      @client.authorization.username = user # for IMAP
+    end
 
-      return @client
+    def auth_interactively
+      credentials = begin
+                      authorizer.auth_interactively(@user)
+                    rescue
+                      raise AuthorizationError.new
+                    end
+      @client.authorization = credentials
+      @client.authorization
+      @client.authorization.username = @user # for IMAP
+    end
+
+    def auth
+      unless credentials = authorizer.credentials(@user)
+        raise AuthorizationError.new
+      end
+      @client.authorization = credentials
+      @client.authorization.username = @user # for IMAP
     end
 
     # label == nil means "[Gmail]/All Mail"
@@ -213,6 +224,15 @@ module Glima
     end
 
     private
+
+    def authorizer
+      @authorizer ||= Clian::Authorizer.new(
+        @client_id,
+        @client_secret,
+        Google::Apis::GmailV1::AUTH_SCOPE,
+        @token_store_path
+      )
+    end
 
     def me
       'me'
