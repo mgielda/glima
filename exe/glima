@@ -57,12 +57,13 @@ class GlimaCLI < Clian::Cli
   desc "auth", "Authenticate interactively"
 
   def auth
-    conf = config.general
-    authorizer = Clian::Authorizer.new(conf.client_id,
-                                       conf.client_secret,
-                                       Google::Apis::GmailV1::AUTH_SCOPE,
-                                       conf.token_store_path)
-    authorizer.auth_interactively(@user)
+    puts "Authenticating #{client.user}..."
+    begin
+      client.auth_interactively
+    rescue Glima::GmailClient::AuthorizationError
+      Thor.new.say "ERROR: authorization failed.", :red
+      exit(1)
+    end
   end
 
   ################################################################
@@ -105,8 +106,7 @@ class GlimaCLI < Clian::Cli
   expand_option :config
 
   def init
-    config_file = options[:config] || DEFAULT_CONFIG_PATH
-    Glima::Command::Init.new(config_file)
+    Glima::Command::Init.new(@config_path)
   end
 
   ################################################################
@@ -270,40 +270,48 @@ class GlimaCLI < Clian::Cli
     end
   end
 
-  attr_reader :builder, :config, :user, :context
+  attr_reader :builder, :config, :user, :context, :client
 
   def setup_global_options(command, *args)
     exit_on_error do
-      @config = Glima::Config.create_from_file(options[:config] || DEFAULT_CONFIG_PATH) unless command.name == "init"
-      @datastore = Glima::DataStore.new(File.expand_path("~/Mail"))
-      @user   = options[:user] || config.general.default_user
-      @context = Glima::Context.new(File.expand_path(DEFAULT_CONFIG_HOME))
-
-      logger = ::Logger.new($stderr)
-      logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
-
-      Glima::Command.client = client unless command.name == "auth"
-      Glima::Command.logger = logger
-      # Glima::GmailClient.logger = logger
-
       if options[:profile]
         require 'profiler'
         Profiler__.start_profile
       end
+
       if options[:debug]
         require "pp"
         $GLIMA_DEBUG = true
         $GLIMA_DEBUG_FOR_DEVELOPER = true if ENV["GLIMA_DEBUG_FOR_DEVELOPER"]
       end
-    end
-  end
 
-  def client
-    begin
-      @client ||= Glima::GmailClient.new(config.general, @user, @datastore)
-    rescue Glima::GmailClient::AuthorizationError
-      STDERR.print "Authorization Error: try ``glima auth'' command.\n"
-      exit(1)
+      logger = ::Logger.new($stderr)
+      logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
+      Glima::Command.logger = logger
+
+      @config_path = options[:config] || DEFAULT_CONFIG_PATH
+
+      return true if ["init", "help"].member?(command.name)
+
+      @config = Glima::Config.create_from_file(@config_path)
+      @datastore = Glima::DataStore.new(File.expand_path("~/Mail"))
+      @user  = options[:user] || config.general.default_user
+      @context = Glima::Context.new(File.expand_path(DEFAULT_CONFIG_HOME))
+      @client = Glima::GmailClient.new(config.general.client_id,
+                                       config.general.client_secret,
+                                       File.expand_path("token_store.yml", File.dirname(@config_path)),
+                                       @user, @datastore)
+
+      Glima::Command.client = @client
+
+      unless ["auth"].member?(command.name)
+        begin
+          @client.auth
+        rescue Glima::GmailClient::AuthorizationError
+          Thor.new.say "ERROR: access token expired? try: glima auth --user=#{@user}", :red
+          exit(1)
+        end
+      end
     end
   end
 end
