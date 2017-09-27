@@ -39,32 +39,28 @@
   #+END_SRC
 
 * Setup
-  1) Create cache directory
-     #+BEGIN_SRC sh
-       $ mkdir -p ~/Mail/all
-     #+END_SRC
-
-  2) Create app config file interactively
+  1) Create app config file interactively
      #+BEGIN_SRC sh
        $ glima init
 
-       Creating /Users/nom/.config/glima/config.yml ...
+       Creating ~/.config/glima/config.yml ...
        Get your CLIENT_ID/CLIENT_SECRET at https://console.developers.google.com
        Googling 'Creating a Google API Console project and client ID' would help.
-
        CLIENT_ID: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
        CLIENT_SECRET: xxxxxxxxxxxxxxxxxxxxxxxx
        Gmail address: xxxxxxxxxxxxxxx@gmail.com
 
-       Making config directory /Users/nom/.config/glimaxxx ...
-             create  /Users/nom/.config/glimaxxx
-       Copying file(s) into /Users/nom/.config/glimaxxx/config.yml ...
-              exist  Ignore /Users/nom/.config/glimaxxx
-                 ok  copy /Users/nom/.config/glimaxxx/config.yml
+       Making config directory ~/.config/glima ...
+             create  /Users/nom/.config/glima
+       Making cache directory ~/.cache/glima ...
+              exist  Ignore /Users/nom/.cache/glima
+       Copying file(s) into ~/.config/glima/config.yml ...
+              exist  Ignore ~/.config/glima
+                 ok  copy /Users/nom/.config/glima/config.yml
        done.
      #+END_SRC
 
-  3) Grant OAuth access to Gmail server (browser will be invoked)
+  2) Grant OAuth access to Gmail server (browser will be invoked)
      #+BEGIN_SRC sh
        $ glima auth
 
@@ -73,7 +69,7 @@
      #+END_SRC
      If you want to add another account, try ~glima auth --user=another_account~.
 
-  4) Check your inbox
+  3) Check your inbox
      #+BEGIN_SRC sh
        $ glima scan +inbox
 

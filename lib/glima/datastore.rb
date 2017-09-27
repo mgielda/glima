@@ -8,7 +8,12 @@ module Glima
       unless basedir and File.directory?(File.expand_path(basedir.to_s))
         raise Glima::ConfigurationError, "datastore directory '#{basedir}' not found"
       end
+
       @basedir = Pathname.new(File.expand_path(basedir))
+
+      unless Dir.exist?(dir = File.expand_path("all", @basedir))
+        FileUtils.mkdir_p(dir)
+      end
     end
 
     def update(message)

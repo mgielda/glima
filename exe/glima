@@ -294,7 +294,7 @@ class GlimaCLI < Clian::Cli
       return true if ["init", "help"].member?(command.name)
 
       @config = Glima::Config.create_from_file(@config_path)
-      @datastore = Glima::DataStore.new(File.expand_path("~/Mail"))
+      @datastore = Glima::DataStore.new(File.expand_path(config.general.cache_directory))
       @user  = options[:user] || config.general.default_user
       @context = Glima::Context.new(File.expand_path(DEFAULT_CONFIG_HOME))
       @client = Glima::GmailClient.new(config.general.client_id,

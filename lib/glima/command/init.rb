@@ -22,12 +22,18 @@ module Glima
         config[:client_id] = @shell.ask "CLIENT_ID:"
         config[:client_secret] = @shell.ask "CLIENT_SECRET:"
         config[:default_user] = @shell.ask "Gmail address:"
+        config[:cache_directory] = "~/.cache/glima"
 
-        # mkdir
+        # mkdir config_dir
         unless Dir.exist?(File.expand_path(config_dir))
           say "Making config directory #{config_dir} ..."
           mkdir_p(File.expand_path(config_dir))
         end
+
+        # mkdir cache_dir
+        cache_dir = config[:cache_directory]
+        say "Making cache directory #{cache_dir} ..."
+        mkdir_p(File.expand_path(cache_dir))
 
         # make config file from tamplate
         say "Copying file(s) into #{config_file} ..."
@@ -78,15 +84,15 @@ module Glima
       end
 
       def mkdir_p(path)
-        path = File.expand_path(path)
+        abspath = File.expand_path(path)
 
-        if File.directory?(path)
+        if File.directory?(abspath)
           say_status "exist", "Ignore #{path}", :yellow
           return
         end
 
         begin
-          FileUtils.mkdir_p(path)
+          FileUtils.mkdir_p(abspath)
           say_status "create", "#{path}", :green
         rescue StandardError => e
           say_status "failed", "#{e.message.split(' @').first} #{path}", :red
