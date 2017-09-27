@@ -225,7 +225,7 @@ class GlimaCLI < Clian::Cli
   ################################################################
   # Command: watch
   ################################################################
-  desc "watch [LABEL]", "Watch gmail server and xzip."
+  desc "watch QUEUE_LABEL MARK_LABEL", "Watch gmail server and xzip."
 
   def watch(queue_label, mark_label)
     queue_label = parse_label_names(queue_label).first

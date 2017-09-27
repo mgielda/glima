@@ -3,37 +3,39 @@ module Glima
     class Watch < Base
 
       def initialize(queue_label = nil, mark_label = nil)
+        # If xzip is successful,
+        #   remove queue_label from the original message, also
+        #   add mark_label to the xzipped message.
+        #
+        add_labels, del_labels = [], []
+        add_labels << mark_label  if mark_label
+        del_labels << queue_label if queue_label
+
+        # if queue_label is set, xzip process scan search zip-attached
+        # messages with queue_label, without mark_label
+        #
+        if queue_label
+          target = "label:#{queue_label.name}"
+          target += " -label:#{mark_label.name}" if mark_label
+        end
+
+        # Cleanup queue before watching imap events.
+        Glima::Command::Xzip.new(target,
+                                 add_dst_labels: add_labels,
+                                 del_dst_labels: del_labels,
+                                 del_src_labels: del_labels)
 
         # Watch "[Gmail]/All Mail" by IMAP idle
-        client.watch(nil) do |ev|
-          next unless ev.type == :added
+        # XXX: IMAP idle does not have timeout mechanism,
+        #      should add timer thread to refresh imap connection.
+        #
+        client.watch(queue_label) do |ev|
+          # next unless ev.type == :added
 
-          # Scan messages in queue_label or new message itself.
-          #
-          # If Xzip process is successful, remove queue_label
-          # from the source message.
-          #
-          if queue_label
-            target      = "label:#{queue_label.name}"
-            target     += " -label:#{mark_label.name}" if mark_label
-            del_labels  = [queue_label]
-          else
-            target      = ev.message.id
-            del_labels  = []
-          end
+          logger.info "xzip #{target}"
 
-          # Also, mark_label will be added to the xzipped message.
-          # It is for avoidance of infinite loop.
-          #
-          if mark_label
-            add_labels = [mark_label]
-          else
-            add_labels = []
-          end
-
-          logger.info "Xzip #{target}"
-
-          Glima::Command::Xzip.new(client, logger, target,
+          target ||= ev.message.id
+          Glima::Command::Xzip.new(target,
                                    add_dst_labels: add_labels,
                                    del_dst_labels: del_labels,
                                    del_src_labels: del_labels)
