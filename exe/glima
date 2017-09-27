@@ -33,6 +33,11 @@ Encoding.default_external="UTF-8"
 class GlimaCLI < Clian::Cli
   package_name 'GLIMA'
 
+  Signal.trap(:INT){
+    Thor.new.say "Interrupted quit.", :red
+    exit(0)
+  }
+
   ################################################################
   # global option
 
