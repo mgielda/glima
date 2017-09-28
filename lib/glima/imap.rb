@@ -148,6 +148,30 @@ module Glima
       end
     end # def wait
 
+    private
+
+    def waitfor
+      id = -1
+      begin
+        @imap.idle do |resp|
+          pp resp
+          if resp.name == "EXISTS"
+            @imap.idle_done
+            id = resp.data.to_i
+          else
+            # pp resp
+          end
+        end
+      rescue Net::IMAP::Error => e
+        if e.inspect.include? "connection closed"
+          reconnect
+        else
+          raise
+        end
+      end
+      return id
+    end
+
     # Ruby IMAP IDLE concurrency - how to tackle? - Stack Overflow
     # http://stackoverflow.com/questions/5604480/ruby-imap-idle-concurrency-how-to-tackle
     # How bad is IMAP IDLE? Joshua Tauberer's Archived Blog
@@ -174,30 +198,6 @@ module Glima
 
         last_uid = mails.last.attr['UID']
       end
-    end
-
-    private
-
-    def waitfor
-      id = -1
-      begin
-        @imap.idle do |resp|
-          pp resp
-          if resp.name == "EXISTS"
-            @imap.idle_done
-            id = resp.data.to_i
-          else
-            # pp resp
-          end
-        end
-      rescue Net::IMAP::Error => e
-        if e.inspect.include? "connection closed"
-          reconnect
-        else
-          raise
-        end
-      end
-      return id
     end
 
     def connect(imap_server, authorization)
