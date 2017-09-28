@@ -27,11 +27,12 @@ module Glima
                                  del_src_labels: del_labels)
 
         # Watch "[Gmail]/All Mail" by IMAP idle
-        # XXX: IMAP idle does not have timeout mechanism,
-        #      should add timer thread to refresh imap connection.
-        #
+
+        timestamp = Time.now
+
         client.watch(queue_label) do |ev|
-          # next unless ev.type == :added
+          # avoid burst events
+          next if Time.now - timestamp < 3
 
           logger.info "xzip #{target}"
 
@@ -40,6 +41,7 @@ module Glima
                                    add_dst_labels: add_labels,
                                    del_dst_labels: del_labels,
                                    del_src_labels: del_labels)
+          timestamp = Time.now
         end
       end
 
