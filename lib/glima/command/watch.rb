@@ -20,6 +20,7 @@ module Glima
         end
 
         # Cleanup queue before watching imap events.
+        logger.info "xzip #{target}"
         Glima::Command::Xzip.new(target,
                                  add_dst_labels: add_labels,
                                  del_dst_labels: del_labels,

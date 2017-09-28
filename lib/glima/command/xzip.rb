@@ -20,11 +20,18 @@ module Glima
 
         ids.each do |message_id|
           # get target mail
+          logger.info "xzip start #{message_id}"
+
           mail = client.get_user_smart_message(message_id) do |m, err|
             if err
-              puts "Error: #{err}"
+              logger.error "Error: #{err}"
               next
             end
+          end
+
+          unless mail.attachments.map(&:filename).any? {|filename| filename =~ /\.zip$/i}
+            logger.info "xzip skip #{message_id} - has no zip attachments"
+            next
           end
 
           # find password candidates from nearby mails
@@ -36,13 +43,13 @@ module Glima
 
           # try to unlock zip attachments
           unless mail.unlock_zip!(password_candidates, logger)
-            puts "Password unlock failed."
+            logger.info "Password unlock failed."
             next
           end
 
           # push back unlocked mail to server
           unless push_mail(mail, "dateHeader", add_dst_label_ids, del_dst_label_ids)
-            puts "Push mail failed."
+            logger.info "Push mail failed."
             next
           end
 

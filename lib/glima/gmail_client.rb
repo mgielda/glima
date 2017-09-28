@@ -11,14 +11,6 @@ module Glima
   class GmailClient
     class AuthorizationError < StandardError ; end
 
-    def self.logger
-      Google::Apis.logger
-    end
-
-    def self.logger=(logger)
-      Google::Apis.logger = logger
-    end
-
     extend Forwardable
 
     def_delegators :@client,
@@ -93,7 +85,7 @@ module Glima
       }.map(&:addr).map(&:ip_address).length > 0
     end
 
-    def initialize(client_id, client_secret, token_store_path, user, datastore)
+    def initialize(client_id, client_secret, token_store_path, user, datastore, logger = nil)
       @client_id = client_id
       @client_secret = client_secret
       @token_store_path = token_store_path
@@ -101,6 +93,13 @@ module Glima
       @datastore = datastore
       @client = Google::Apis::GmailV1::GmailService.new
       @client.client_options.application_name = 'glima'
+      if logger
+        @logger = logger
+      else
+        # quiet
+        @logger = ::Logger.new($stderr)
+        @logger.formatter = proc {|severity, datetime, progname, msg| ""}
+      end
     end
 
     def auth_interactively
@@ -124,8 +123,6 @@ module Glima
 
     def watch(label = nil, &block)
       loop do
-        puts "tick"
-
         curr_hid = get_user_profile(me).history_id.to_i
         last_hid ||= curr_hid
 
@@ -138,6 +135,8 @@ module Glima
           yield ev
           last_hid = ev.history_id.to_i
         end
+
+        @logger.info "[#{self.class}#watch] Gmail client tick"
       end
     end
 
@@ -255,6 +254,7 @@ module Glima
     # label == nil means "[Gmail]/All Mail"
     def wait(label = nil, timeout_sec = 60)
       @imap ||= Glima::ImapWatch.new("imap.gmail.com", @client.authorization)
+      @logger.info "[#{self.class}#wait] Waiting IMAP idle"
       @imap.wait(label&.name, timeout_sec)
     end
 
