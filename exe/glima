@@ -316,10 +316,4 @@ class GlimaCLI < Clian::Cli
   end
 end
 
-def teardown
-  if options[:profile]
-    Profiler__.print_profile($stdout)
-  end
-end
-
 GlimaCLI.start(ARGV)

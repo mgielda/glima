@@ -97,26 +97,6 @@ module Glima
       connect(imap_server, authorization)
     end
 
-    def watch(folder, &block)
-      @imap.select(Net::IMAP.encode_utf7(folder))
-
-      @thread = Thread.new do
-        while true
-          begin
-            @imap.idle do |resp|
-              yield resp if resp.name == "EXISTS"
-            end
-          rescue Net::IMAP::Error => e
-            if e.inspect.include? "connection closed"
-              connect
-            else
-              raise
-            end
-          end
-        end
-      end
-    end
-
     def wait(folder = nil, timeout_sec = 60)
       if folder
         folder = Net::IMAP.encode_utf7(folder)
@@ -149,56 +129,6 @@ module Glima
     end # def wait
 
     private
-
-    def waitfor
-      id = -1
-      begin
-        @imap.idle do |resp|
-          pp resp
-          if resp.name == "EXISTS"
-            @imap.idle_done
-            id = resp.data.to_i
-          else
-            # pp resp
-          end
-        end
-      rescue Net::IMAP::Error => e
-        if e.inspect.include? "connection closed"
-          reconnect
-        else
-          raise
-        end
-      end
-      return id
-    end
-
-    # Ruby IMAP IDLE concurrency - how to tackle? - Stack Overflow
-    # http://stackoverflow.com/questions/5604480/ruby-imap-idle-concurrency-how-to-tackle
-    # How bad is IMAP IDLE? Joshua Tauberer's Archived Blog
-    # https://joshdata.wordpress.com/2014/08/09/how-bad-is-imap-idle/
-    #
-    def watch_and_fetch(folder, &block)
-      @imap.select(folder)
-      num = @imap.responses["EXISTS"].last
-
-      last_uid = @imap.fetch(num, "UID").first.attr['UID']
-      puts "Last_UID: #{last_uid}"
-
-      while true
-        id = waitfor()
-
-        puts "*********** GET EXISTS: #{id}"
-        mails = @imap.uid_fetch(last_uid..-1, %w(UID X-GM-MSGID X-GM-THRID X-GM-LABELS))
-
-        mails.each do |mail|
-          next if mail.attr['UID'] <= last_uid
-          resp  = yield mail
-          return unless resp
-        end
-
-        last_uid = mails.last.attr['UID']
-      end
-    end
 
     def connect(imap_server, authorization)
       retry_count = 0
