@@ -122,12 +122,6 @@ module Glima
       @client.authorization.username = @user # for IMAP
     end
 
-    # label == nil means "[Gmail]/All Mail"
-    def wait(label = nil)
-      @imap ||= Glima::ImapWatch.new("imap.gmail.com", @client.authorization)
-      @imap.wait(label&.name)
-    end
-
     def watch(label = nil, &block)
       loop do
         puts "tick"
@@ -135,8 +129,10 @@ module Glima
         curr_hid = get_user_profile(me).history_id.to_i
         last_hid ||= curr_hid
 
-        # FIXME: if server is changed at this point, we will miss the event.
-        wait(label) if last_hid == curr_hid
+        # If server is changed at this point, we will miss the events.
+        # so, we have to set the timeout and update history record.
+
+        wait(label, 60) if last_hid == curr_hid
 
         each_events(since: last_hid) do |ev|
           yield ev
@@ -254,6 +250,12 @@ module Glima
           end
         end
       end
+    end
+
+    # label == nil means "[Gmail]/All Mail"
+    def wait(label = nil, timeout_sec = 60)
+      @imap ||= Glima::ImapWatch.new("imap.gmail.com", @client.authorization)
+      @imap.wait(label&.name, timeout_sec)
     end
 
   end # class GmailClient

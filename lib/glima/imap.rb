@@ -3,6 +3,10 @@ require "net/imap"
 require "pp"
 
 module Glima
+  #
+  # IMAP client with IMAP extentions provided by Gmail
+  #   https://developers.google.com/gmail/imap/imap-extensions
+  #
   class IMAP < Net::IMAP
     def initialize(host, port_or_options = {},
                    usessl = false, certs = nil, verify = true)
@@ -89,6 +93,7 @@ module Glima
     :disconnect
 
     def initialize(imap_server, authorization)
+      @imap_server, @authorization = imap_server, authorization
       connect(imap_server, authorization)
     end
 
@@ -112,7 +117,7 @@ module Glima
       end
     end
 
-    def wait(folder = nil)
+    def wait(folder = nil, timeout_sec = 60)
       if folder
         folder = Net::IMAP.encode_utf7(folder)
       else
@@ -122,18 +127,26 @@ module Glima
 
       @imap.select(folder)
       begin
+        th = Thread.new(@imap, timeout_sec) do |imap, timeout|
+          begin
+            sleep timeout
+          ensure
+            imap.idle_done
+          end
+        end
+
         @imap.idle do |resp|
           puts "#{resp.name}"
-          @imap.idle_done # if resp.name == "EXISTS"
+          th.terminate
         end
       rescue Net::IMAP::Error => e
         if e.inspect.include? "connection closed"
-          connect
+          reconnect
         else
           raise
         end
       end
-    end
+    end # def wait
 
     # Ruby IMAP IDLE concurrency - how to tackle? - Stack Overflow
     # http://stackoverflow.com/questions/5604480/ruby-imap-idle-concurrency-how-to-tackle
@@ -179,7 +192,7 @@ module Glima
         end
       rescue Net::IMAP::Error => e
         if e.inspect.include? "connection closed"
-          connect
+          reconnect
         else
           raise
         end
@@ -191,15 +204,15 @@ module Glima
       retry_count = 0
 
       begin
-        username     = authorization.username
-        access_token = authorization.access_token
-
         @imap = Glima::IMAP.new(imap_server, 993, true)
-        @imap.authenticate('XOAUTH2', username, access_token)
-        puts "connected to imap server #{imap_server}."
+        @imap.authenticate('XOAUTH2',
+                           authorization.username,
+                           authorization.access_token)
+        puts "Connected to imap server #{imap_server}."
 
       rescue Net::IMAP::NoResponseError => e
         if e.inspect.include? "Invalid credentials" && retry_count < 2
+          puts "Refreshing access token for #{imap_server}."
           authorization.refresh!
           retry_count += 1
           retry
@@ -209,11 +222,9 @@ module Glima
       end
     end
 
-    # def connect(imap_server, user_name, access_token)
-    #   @imap = Glima::IMAP.new(imap_server, 993, true)
-    #   # @imap.class.debug = true
-    #   @imap.authenticate('XOAUTH2', user_name, access_token)
-    #   puts "connected to imap server #{imap_server}."
-    # end
+    def reconnect
+      connect(@imap_server, @authorization)
+    end
+
   end # class ImapWatch
 end # module Glima
