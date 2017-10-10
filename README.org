@@ -39,7 +39,12 @@
   #+END_SRC
 
 * Setup
-  1) Create app config file interactively
+  1) Get OAuth CLIENT_ID/CLIENT_SECRET
+
+     Visit https://console.developers.google.com and follow the instruction.
+     Googling 'Creating a Google API Console project and client ID' would help.
+
+  2) Create app config file interactively
      #+BEGIN_SRC sh
        $ glima init
 
@@ -60,7 +65,7 @@
        done.
      #+END_SRC
 
-  2) Grant OAuth access to Gmail server (browser will be invoked)
+  3) Grant OAuth access to Gmail server (browser will be invoked)
      #+BEGIN_SRC sh
        $ glima auth
 
@@ -69,7 +74,7 @@
      #+END_SRC
      If you want to add another account, try ~glima auth --user=another_account~.
 
-  3) Check your inbox
+  4) Check your inbox
      #+BEGIN_SRC sh
        $ glima scan +inbox
 
