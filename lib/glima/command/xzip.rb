@@ -66,9 +66,9 @@ module Glima
 
           client.modify_message('me', message_id, req) do |res,err|
             if res
-              puts "Update #{message_id} successfully."
+              logger.info "[#{self.class}#initialize] Update #{message_id} successfully."
             else
-              puts "Error: #{err}"
+              logger.info "[#{self.class}#initialize] Error: #{err}"
             end
           end
         end
@@ -96,10 +96,10 @@ module Glima
           internal_date_source: date_source,
           upload_source: StringIO.new(mail.to_s)) do |msg, err|
           if msg
-            puts "pushed to: #{msg.id}"
+            logger.info "[#{self.class}#push_mail] pushed to: #{msg.id}"
             return true
           else
-            STDERR.puts "Error: #{err}"
+            logger.info "[#{self.class}#push_mail] Error: #{err}"
             return false
           end
         end

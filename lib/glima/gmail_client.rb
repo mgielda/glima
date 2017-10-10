@@ -123,6 +123,8 @@ module Glima
 
     def watch(label = nil, &block)
       loop do
+        @logger.info "[#{self.class}#watch] loop tick"
+
         curr_hid = get_user_profile(me).history_id.to_i
         last_hid ||= curr_hid
 
@@ -135,8 +137,6 @@ module Glima
           yield ev
           last_hid = ev.history_id.to_i
         end
-
-        @logger.info "[#{self.class}#watch] Gmail client tick"
       end
     end
 
@@ -254,8 +254,10 @@ module Glima
     # label == nil means "[Gmail]/All Mail"
     def wait(label = nil, timeout_sec = 60)
       @imap ||= Glima::ImapWatch.new("imap.gmail.com", @client.authorization)
-      @logger.info "[#{self.class}#wait] Waiting IMAP idle"
+      @logger.info "[#{self.class}#wait] Enter"
       @imap.wait(label&.name, timeout_sec)
+
+      @logger.info "[#{self.class}#wait] Exit"
     end
 
   end # class GmailClient

@@ -92,12 +92,14 @@ module Glima
     :select,
     :disconnect
 
-    def initialize(imap_server, authorization)
-      @imap_server, @authorization = imap_server, authorization
+    def initialize(imap_server, authorization, logger)
+      @imap_server, @authorization, @logger = imap_server, authorization, logger
       connect(imap_server, authorization)
     end
 
     def wait(folder = nil, timeout_sec = 60)
+      logger.info "[#{self.class}#wait] Enter"
+
       if folder
         folder = Net::IMAP.encode_utf7(folder)
       else
@@ -126,11 +128,13 @@ module Glima
           raise
         end
       end
+      logger.info "[#{self.class}#wait] Exit"
     end # def wait
 
     private
 
     def connect(imap_server, authorization)
+      logger.info "[#{self.class}#connect] Enter"
       retry_count = 0
 
       begin
@@ -138,11 +142,13 @@ module Glima
         @imap.authenticate('XOAUTH2',
                            authorization.username,
                            authorization.access_token)
-        puts "Connected to imap server #{imap_server}."
+        logger.info "[#{self.class}#connect] connected"
 
       rescue Net::IMAP::NoResponseError => e
+        logger.info "[#{self.class}#connect] rescue Net::IMAP::NoResponseError => e"
+
         if e.inspect.include? "Invalid credentials" && retry_count < 2
-          puts "Refreshing access token for #{imap_server}."
+          logger.info "[#{self.class}#connect] Refreshing access token for #{imap_server}."
           authorization.refresh!
           retry_count += 1
           retry
@@ -150,10 +156,17 @@ module Glima
           raise
         end
       end
+      logger.info "[#{self.class}#connect] Exit"
     end
 
     def reconnect
+      logger.info "[#{self.class}#reconnect] Enter"
       connect(@imap_server, @authorization)
+      logger.info "[#{self.class}#reconnect] Exit"
+    end
+
+    def logger
+      @logger
     end
 
   end # class ImapWatch

@@ -20,8 +20,8 @@ module Glima
         end
 
         # Cleanup queue before watching imap events.
-        logger.info "xzip #{target}"
         Glima::Command::Xzip.new(target,
+        logger.info "xzip cleanup queue before watching imap events #{target}."
                                  add_dst_labels: add_labels,
                                  del_dst_labels: del_labels,
                                  del_src_labels: del_labels)
@@ -31,10 +31,11 @@ module Glima
         timestamp = Time.now
 
         client.watch(queue_label) do |ev|
+        logger.info "[#{self.class}#initialize] Entering GmailClient#watch"
           # avoid burst events
           next if Time.now - timestamp < 3
 
-          logger.info "xzip #{target}"
+          logger.info "[#{self.class}#initialize] xzip #{target} in event loop."
 
           target ||= ev.message.id
           Glima::Command::Xzip.new(target,
@@ -43,6 +44,7 @@ module Glima
                                    del_src_labels: del_labels)
           timestamp = Time.now
         end
+        logger.info "[#{self.class}#initialize] Done (not reached)"
       end
 
     end # class Watch
