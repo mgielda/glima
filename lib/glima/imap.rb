@@ -90,7 +90,7 @@ module Glima
     def_delegators :@imap,
     :fetch,
     :select,
-    :disconnect
+    :disconnected?
 
     def initialize(imap_server, authorization, logger)
       @imap_server, @authorization, @logger = imap_server, authorization, logger

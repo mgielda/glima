@@ -1,7 +1,7 @@
 module Glima
   module Command
     class Xzip < Base
-      def initialize(target,
+      def initialize(target, default_passwords,
                      add_src_labels: [],
                      del_src_labels: [],
                      add_dst_labels: [],
@@ -35,7 +35,7 @@ module Glima
           end
 
           # find password candidates from nearby mails
-          password_candidates = []
+          password_candidates = default_passwords || []
           client.nearby_mails(mail) do |nm|
             logger.info "Passwordish mail: " + nm.format_summary
             password_candidates += nm.find_passwordish_strings

@@ -253,8 +253,15 @@ module Glima
 
     # label == nil means "[Gmail]/All Mail"
     def wait(label = nil, timeout_sec = 60)
-      @imap ||= Glima::ImapWatch.new("imap.gmail.com", @client.authorization)
       @logger.info "[#{self.class}#wait] Enter"
+
+      if @imap.nil? || @imap.disconnected?
+        @imap = Glima::ImapWatch.new("imap.gmail.com", @client.authorization, @logger)
+
+        @logger.info "[#{self.class}#wait] create new IMAPWatch #{@imap}"
+      else
+        @logger.info "[#{self.class}#wait] use existing IMAPWatch #{@imap}"
+      end
       @imap.wait(label&.name, timeout_sec)
 
       @logger.info "[#{self.class}#wait] Exit"

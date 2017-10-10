@@ -2,7 +2,7 @@ module Glima
   module Command
     class Watch < Base
 
-      def initialize(queue_label = nil, mark_label = nil)
+      def initialize(queue_label = nil, mark_label = nil, default_passwords = [])
         # If xzip is successful,
         #   remove queue_label from the original message, also
         #   add mark_label to the xzipped message.
@@ -20,8 +20,8 @@ module Glima
         end
 
         # Cleanup queue before watching imap events.
-        Glima::Command::Xzip.new(target,
         logger.info "xzip cleanup queue before watching imap events #{target}."
+        Glima::Command::Xzip.new(target, default_passwords,
                                  add_dst_labels: add_labels,
                                  del_dst_labels: del_labels,
                                  del_src_labels: del_labels)
@@ -30,15 +30,15 @@ module Glima
 
         timestamp = Time.now
 
-        client.watch(queue_label) do |ev|
         logger.info "[#{self.class}#initialize] Entering GmailClient#watch"
+        client.watch do |ev|
           # avoid burst events
           next if Time.now - timestamp < 3
 
           logger.info "[#{self.class}#initialize] xzip #{target} in event loop."
 
           target ||= ev.message.id
-          Glima::Command::Xzip.new(target,
+          Glima::Command::Xzip.new(target, default_passwords,
                                    add_dst_labels: add_labels,
                                    del_dst_labels: del_labels,
                                    del_src_labels: del_labels)

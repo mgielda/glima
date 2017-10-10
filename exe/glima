@@ -228,9 +228,25 @@ class GlimaCLI < Clian::Cli
   desc "watch QUEUE_LABEL MARK_LABEL", "Watch gmail server and xzip."
 
   def watch(queue_label, mark_label)
-    queue_label = parse_label_names(queue_label).first
-    mark_label  = parse_label_names(mark_label).first
-    Glima::Command::Watch.new(queue_label, mark_label)
+    wait = 1
+
+    default_passwords = []
+    password_file = options[:password_file] || config.general.zip_passwords_file
+    if File.exists?(File.expand_path(password_file))
+      default_passwords += File.open(File.expand_path(password_file)) {|f| f.read.split(/\n+/) }
+    end
+
+    begin
+      ql = parse_label_names(queue_label).first
+      ml = parse_label_names(mark_label).first
+      Glima::Command::Watch.new(ql, ml, default_passwords)
+    rescue => err
+      @logger.info err
+      @logger.info err.backtrace
+      @logger.info "Waiting retry for #{wait} seconds."
+      sleep (wait = [60, wait * 2].min)
+      retry
+    end
   end
 
   ################################################################
@@ -244,7 +260,14 @@ class GlimaCLI < Clian::Cli
   method_option :del_dst_labels, :desc => "Del labels from destination", :banner => "LABEL,..."
 
   def xzip(target)
-    Glima::Command::Xzip.new(target,
+    default_passwords = []
+
+    password_file = options[:password_file] || config.general.zip_passwords_file
+    if File.exists?(password_file)
+      default_passwords += File.open(password_file) {|f| f.read.split(/\n+/) }
+    end
+
+    Glima::Command::Xzip.new(target, default_passwords,
                              add_src_labels: parse_label_names(options[:add_src_labels]),
                              del_src_labels: parse_label_names(options[:del_src_labels]),
                              add_dst_labels: parse_label_names(options[:add_dst_labels]),
