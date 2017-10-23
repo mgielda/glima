@@ -182,7 +182,7 @@ class GlimaCLI < Clian::Cli
   ################################################################
   # Command: scan
   ################################################################
-  desc "scan +FOLDER [QUERY]", "Scan FOLDER with QUERY."
+  desc "scan +LABEL [QUERY]", "Scan LABEL with QUERY."
 
   method_option :format, :desc => "Set printing format", :enum => %w(mew text archive)
 
@@ -260,7 +260,7 @@ class GlimaCLI < Clian::Cli
   ################################################################
   # Command: xzip
   ################################################################
-  desc "xzip TARGET", "Transform zip-attachments in TARGET and transmit to Gmail."
+  desc "xzip TARGET", "Transform zip-attachments in TARGET and push back to Gmail."
 
   method_option :add_src_labels, :desc => "Add labels to source",        :banner => "LABEL,..."
   method_option :add_dst_labels, :desc => "Add labels to destination",   :banner => "LABEL,..."
