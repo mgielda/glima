@@ -228,23 +228,30 @@ class GlimaCLI < Clian::Cli
   desc "watch QUEUE_LABEL MARK_LABEL", "Watch gmail server and xzip."
 
   def watch(queue_label, mark_label)
-    wait = 1
-
     default_passwords = []
     password_file = options[:password_file] || config.general.zip_passwords_file
     if File.exists?(File.expand_path(password_file))
       default_passwords += File.open(File.expand_path(password_file)) {|f| f.read.split(/\n+/) }
     end
 
+    error_count = 0
     begin
       ql = parse_label_names(queue_label).first
       ml = parse_label_names(mark_label).first
+      timestamp = Time.now
       Glima::Command::Watch.new(ql, ml, default_passwords)
     rescue => err
       @logger.info err
       @logger.info err.backtrace
+      error_count += 1
+
+      # If Watch command lived longer than 60 seconds, it must have
+      # worked at least once.  So, reset error_count
+      error_count = 0 if Time.now - timestamp > 60
+
+      wait = 2 ** [error_count, 6].min
       @logger.info "Waiting retry for #{wait} seconds."
-      sleep (wait = [60, wait * 2].min)
+      sleep wait
       retry
     end
   end
