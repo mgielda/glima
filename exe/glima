@@ -32,6 +32,7 @@ Encoding.default_external="UTF-8"
 
 class GlimaCLI < Clian::Cli
   package_name 'GLIMA'
+  remove_command :configuration
 
   Signal.trap(:INT){
     Thor.new.say "Interrupted quit.", :red
