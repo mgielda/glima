@@ -262,8 +262,13 @@ module Glima
       else
         @logger.info "[#{self.class}#wait] use existing IMAPWatch #{@imap}"
       end
-      @imap.wait(label&.name, timeout_sec)
 
+      begin
+        @imap.wait(label&.name, timeout_sec)
+      rescue
+        @imap = nil
+        @logger.info "[#{self.class}#wait] imap connection error. abandon current imap connection."
+      end
       @logger.info "[#{self.class}#wait] Exit"
     end
 
