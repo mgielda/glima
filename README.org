@@ -26,6 +26,13 @@
 
 * Installation
   Glima requires Ruby 2.3 or newer.
+
+** Install using gem
+  #+BEGIN_SRC sh
+    $ gem install glima
+  #+END_SRC
+
+** Install in sandbox
   It uses safe navigation operator (=&.=) introduced in Ruby 2.3.
 
   #+BEGIN_SRC sh
