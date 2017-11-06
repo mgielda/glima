@@ -79,7 +79,7 @@ module Glima
       end
 
       def format_summary(count = nil)
-        date = Time.at(internal_date.to_i/1000).strftime("%m/%d %H:%M")
+        date = Time.at(internal_date.to_i/1000).strftime("%Y/%m/%d %H:%M")
         count = if count then ("%4d " % count) else "" end
         return "#{count}#{date} #{id} #{CGI.unescapeHTML(snippet)[0..30]}"
       end
