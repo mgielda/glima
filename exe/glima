@@ -75,6 +75,7 @@ class GlimaCLI < Clian::Cli
   method_option :zip_passwords_file, :desc => "Set additional password-list file."
 
   def dezip(gmail_id, directory)
+    @logger.info "Start"
     password_file = options[:password_file] || config.general.zip_passwords_file
     Glima::Command::Dezip.new(gmail_id, directory, password_file)
   end

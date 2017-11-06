@@ -258,9 +258,9 @@ module Glima
       if @imap.nil? || @imap.disconnected?
         @imap = Glima::ImapWatch.new("imap.gmail.com", @client.authorization, @logger)
 
-        @logger.info "[#{self.class}#wait] create new IMAPWatch #{@imap}"
+        @logger.debug "[#{self.class}#wait] create new IMAPWatch #{@imap}"
       else
-        @logger.info "[#{self.class}#wait] use existing IMAPWatch #{@imap}"
+        @logger.debug "[#{self.class}#wait] use existing IMAPWatch #{@imap}"
       end
 
       begin

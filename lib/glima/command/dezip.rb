@@ -15,13 +15,16 @@ module Glima
 
         # get password candidates from config file
         password_candidates = []
+        password_file = File.expand_path(password_file)
         if File.exists?(password_file)
           password_candidates += File.open(password_file) {|f| f.read.split(/\n+/) }
         end
 
         # gather password candidates from nearby mails
+        index = 0
         client.nearby_mails(mail) do |nm|
-          logger.info "Passwordish mail: " + nm.format_summary
+          index += 1
+          logger.info "Passwordish mail(#{index}): " + nm.format_summary
           password_candidates += nm.find_passwordish_strings
         end
 

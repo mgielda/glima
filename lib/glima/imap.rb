@@ -118,7 +118,7 @@ module Glima
         end
 
         @imap.idle do |resp|
-          puts "#{resp.name}"
+          logger.info "[#{self.class}#wait] got event #{resp.name} in IMAP IDLE"
           th.terminate
         end
       rescue Net::IMAP::Error => e
