@@ -1,0 +1,86 @@
+#!/usr/bin/env ruby
+
+# Usage: mail-finder mailfile.eml passwordish_mail_directory output_directory
+
+################################################################
+# rbenv support:
+# If this file is a symlink, and bound to a specific ruby
+# version via rbenv (indicated by RBENV_VERSION),
+# I want to resolve the symlink and re-exec
+# the original executable respecting the .ruby_version
+# which should indicate the right version.
+#
+if File.symlink?(__FILE__) and ENV["RBENV_VERSION"]
+  ENV["RBENV_VERSION"] = nil
+  shims_path = File.expand_path("shims", ENV["RBENV_ROOT"])
+  ENV["PATH"] = shims_path + ":" + ENV["PATH"]
+  exec(File.readlink(__FILE__), *ARGV)
+end
+
+gemfile = File.expand_path("../../Gemfile", __FILE__)
+
+if File.exists?(gemfile + ".lock")
+  ENV["BUNDLE_GEMFILE"] = gemfile
+  require "bundler/setup"
+end
+
+require "rubygems"
+require "date"
+require "mail"
+require "glima"
+require "logger"
+
+logger = ::Logger.new($stderr)
+logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n"}
+
+Encoding.default_external="UTF-8"
+
+def find_nearby_mail(dir, &block)
+  if File.directory?(dir)
+    Dir.glob(File.expand_path('[0-9]*', dir)) do |eml|
+      header = File.open(eml, "rt") {|f| f.gets("")}
+      if header =~ /^Date: (.*)$/
+        begin
+          yield(eml, Date.parse($1))
+        rescue ArgumentError
+          nil
+        end
+      end
+    end
+  end
+end
+
+mail = Glima::Resource::Mail.read(ARGV.shift)
+hint = ARGV.shift
+directory = ARGV.shift || "~/Downloads/attachments"
+
+password_candidates = []
+
+begin
+  password_candidates += File.open(File.expand_path("~/.config/glima/passwords.txt")).read.strip.split("\n")
+rescue
+end
+
+find_nearby_mail(hint) do |eml, date|
+  if (mail.date - date).to_i.abs < 2
+    candidate = Glima::Resource::Mail.read(eml)
+    if candidate.from == mail.from
+      puts "#{date}: #{File.basename(eml)}: #{mail.from.first} #{mail.subject}"
+      password_candidates += candidate.find_passwordish_strings
+    end
+  end
+end
+
+# try to unlock zip attachments
+unless mail.unlock_zip!(password_candidates, logger)
+  puts "Password unlock failed."
+  exit 1
+end
+
+# Write to unlocked zip file to DIRECTORY
+mail.attachments.each do |attachment|
+  next unless attachment.filename =~ /\.zip$/i
+  zip_filename = File.expand_path(attachment.filename, directory)
+  Glima::Zip.new(attachment.body.decoded).write_to_file(zip_filename)
+  puts "Wrote to #{zip_filename || 'STDOUT'}."
+end
