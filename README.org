@@ -45,6 +45,15 @@
     $ export PATH=/path/to/install/glima/exe:$PATH
   #+END_SRC
 
+** Install from Docker image
+   #+BEGIN_SRC sh
+     $ docker pull nom4476/glima
+     $ curl https://raw.githubusercontent.com/yoshinari-nomura/glima/master/exe/glima-docker.sh > glima
+     $ chmod +x glima
+     $ mkdir -p ~/.config/glima ~/.cache/glima
+     $ ./glima help
+   #+END_SRC
+
 * Setup
   1) Get OAuth CLIENT_ID/CLIENT_SECRET
 
