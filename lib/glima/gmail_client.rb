@@ -265,9 +265,12 @@ module Glima
 
       begin
         @imap.wait(label&.name, timeout_sec)
-      rescue
+
+      rescue => err
         @imap = nil
         @logger.info "[#{self.class}#wait] imap connection error. abandon current imap connection."
+        @logger.info err
+        @logger.info err.backtrace
       end
       @logger.info "[#{self.class}#wait] Exit"
     end
