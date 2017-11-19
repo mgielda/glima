@@ -108,19 +108,16 @@ module Glima
       end
 
       @imap.select(folder)
-      begin
-        th = Thread.new(@imap, timeout_sec) do |imap, timeout|
-          begin
-            sleep timeout
-          ensure
-            imap.idle_done
-          end
-        end
+      logger.info "[#{self.class}#wait] IMAP Select folder #{Net::IMAP.decode_utf7(folder)}"
 
-        @imap.idle do |resp|
+      begin
+        logger.info "[#{self.class}#wait] IMAP IDLE start (timeout: #{timeout_sec})"
+        @imap.idle(timeout_sec) do |resp|
           logger.info "[#{self.class}#wait] got event #{resp.name} in IMAP IDLE"
-          th.terminate
+          @imap.idle_done
         end
+        logger.info "[#{self.class}#wait] IMAP IDLE done"
+
       rescue Net::IMAP::Error => e
         if e.inspect.include? "connection closed"
           reconnect
