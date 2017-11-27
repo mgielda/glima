@@ -107,8 +107,9 @@ module Glima
         folder = @imap.list("", "[Gmail]/*").find {|f| f.attr.include?(:All)}.name
       end
 
+      logger.info "[#{self.class}#wait] IMAP Selecting #{Net::IMAP.decode_utf7(folder)}..."
       @imap.select(folder)
-      logger.info "[#{self.class}#wait] IMAP Select folder #{Net::IMAP.decode_utf7(folder)}"
+      logger.info "[#{self.class}#wait] IMAP Selected #{Net::IMAP.decode_utf7(folder)}"
 
       begin
         logger.info "[#{self.class}#wait] IMAP IDLE start (timeout: #{timeout_sec})"
