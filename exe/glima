@@ -238,9 +238,9 @@ class GlimaCLI < Clian::Cli
 
     error_count = 0
     begin
+      timestamp = Time.now
       ql = parse_label_names(queue_label).first
       ml = parse_label_names(mark_label).first
-      timestamp = Time.now
       Glima::Command::Watch.new(ql, ml, default_passwords)
     rescue => err
       @logger.info err
