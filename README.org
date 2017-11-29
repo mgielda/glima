@@ -98,6 +98,6 @@
        2 09/27 14:00 15ec1b716bbb6bdc Yeah...
        :
      #+END_SRC
-* 「パスワードは別途お送りします」をなんとかしたい
-  Japanese blog entry:
-  http://quickhack.net/nom/blog/2017-11-06-password-is-in-another-mail.html
+
+* Japanese blog entry about glima xzip.
+  [[http://quickhack.net/nom/blog/2017-11-06-password-is-in-another-mail.html][「パスワードは別途お送りします」をなんとかしたい]]
