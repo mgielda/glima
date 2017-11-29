@@ -99,5 +99,28 @@
        :
      #+END_SRC
 
+* Invoke decrypter from emacs mailer (Mew)
+  Minimum setup: add belows in your .emacs:
+  #+BEGIN_SRC emacs-lisp
+    (setq load-path
+          (cons "~/path/to/this/file load-path"))
+    (autoload 'axman-mew-decrypt-current-message-gmail "axman")
+    (autoload 'axman-mew-decrypt-current-message-local "axman")
+  #+END_SRC
+
+  How to use:
+  1) In mew-summary buffer (ie. %inbox),
+     point at an email with encrypted-ZIP attachment.
+
+  2) M-x axman-mew-decrypt-current-message-local
+
+  3) It will find the password from the current folder (%inbox)
+     inspecting in passwordish-emails.
+
+  axman-mew-decrypt-current-message-gmail is another version that works
+  with Gmail server.  It would be useful if your email server is
+  Gmail with IMAP enabled.
+
 * Japanese blog entry about glima xzip.
-  [[http://quickhack.net/nom/blog/2017-11-06-password-is-in-another-mail.html][「パスワードは別途お送りします」をなんとかしたい]]
+  + [[http://quickhack.net/nom/blog/2017-11-06-password-is-in-another-mail.html][「パスワードは別途お送りします」をなんとかしたい]]
+  + [[http://quickhack.net/nom/blog/2017-11-29-mail-decrypter-for-mew.html][「パスワードは別途お送りします」を Mew でなんとかしたい]]
