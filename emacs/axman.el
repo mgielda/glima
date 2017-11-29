@@ -18,7 +18,7 @@
 ;;
 ;;  2) add belows in your .emacs:
 ;;     (setq load-path
-;;           (cons "~/path/to/this/file load-path))
+;;           (cons "~/path/to/this/file load-path"))
 ;;     (autoload 'axman-mew-decrypt-current-message-gmail "axman")
 ;;     (autoload 'axman-mew-decrypt-current-message-local "axman")
 ;;
@@ -26,12 +26,12 @@
 ;;  1) In mew-summary buffer (ie. %inbox),
 ;;     point at an email with encrypted-ZIP attachment.
 ;;
-;;  2) M-x axman-decrypt-current-message-local
+;;  2) M-x axman-mew-decrypt-current-message-local
 ;;
 ;;  3) It will find the password from the current folder (%inbox)
 ;;     inspecting in passwordish-emails.
 ;;
-;; axman-decrypt-current-message-gmail is another version that works
+;; axman-mew-decrypt-current-message-gmail is another version that works
 ;; with Gmail server.  It would be useful if your email server is
 ;; Gmail with IMAP enabled.
 ;;
