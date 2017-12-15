@@ -8,7 +8,7 @@ RSpec::Core::RakeTask.new(:spec)
 namespace :docker do
   tag = "nom4476/glima"
 
-  desc "Build Dokcer image from Dockerfile"
+  desc "Build Docker image from Dockerfile"
   task :build do
     version = Glima::VERSION
     system "docker build --build-arg GLIMA_VERSION=#{version} -t #{tag} ."
