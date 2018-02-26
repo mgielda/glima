@@ -352,7 +352,8 @@ class GlimaCLI < Clian::Cli
 
       unless ["auth"].member?(command.name)
         begin
-          @client.auth
+          @client.auth unless @client_already_authorized
+          @client_already_authorized = true
         rescue Glima::GmailClient::AuthorizationError
           Thor.new.say "ERROR: access token expired? try: glima auth --user=#{@user}", :red
           exit(1)
