@@ -329,24 +329,26 @@ class GlimaCLI < Clian::Cli
         $GLIMA_DEBUG_FOR_DEVELOPER = true if ENV["GLIMA_DEBUG_FOR_DEVELOPER"]
       end
 
-      @logger = ::Logger.new($stderr)
-      @logger.formatter = proc {|severity, datetime, progname, msg| "#{datetime} #{msg}\n"}
-      Glima::Command.logger = @logger
+      unless @logger
+        @logger = ::Logger.new($stderr)
+        @logger.formatter = proc {|severity, datetime, progname, msg| "#{datetime} #{msg}\n"}
+        Glima::Command.logger = @logger
+      end
 
       @config_path = options[:config] || DEFAULT_CONFIG_PATH
 
       return true if ["init", "help"].member?(command.name)
 
-      @config = Glima::Config.create_from_file(@config_path)
-      @datastore = Glima::DataStore.new(File.expand_path(config.general.cache_directory))
+      @config ||= Glima::Config.create_from_file(@config_path)
+      @datastore ||= Glima::DataStore.new(File.expand_path(config.general.cache_directory))
       @user  = options[:user] || config.general.default_user
-      @context = Glima::Context.new(File.expand_path(DEFAULT_CONFIG_HOME))
-      @client = Glima::GmailClient.new(config.general.client_id,
-                                       config.general.client_secret,
-                                       File.expand_path("token_store.yml", File.dirname(@config_path)),
-                                       @user, @datastore, @logger)
+      @context ||= Glima::Context.new(File.expand_path(DEFAULT_CONFIG_HOME))
+      @client ||= Glima::GmailClient.new(config.general.client_id,
+                                         config.general.client_secret,
+                                         File.expand_path("token_store.yml", File.dirname(@config_path)),
+                                         @user, @datastore, @logger)
 
-      Glima::Command.client = @client
+      Glima::Command.client ||= @client
 
       unless ["auth"].member?(command.name)
         begin
