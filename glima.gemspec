@@ -27,7 +27,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 2.3.0"
 
   spec.add_runtime_dependency "thor", ">= 0.19.1"
-  spec.add_runtime_dependency "clian", ">= 0.3.0"
+  spec.add_runtime_dependency "clian", ">= 0.4.0"
   spec.add_runtime_dependency "mail"
   spec.add_runtime_dependency "rubyzip"
 

@@ -361,6 +361,15 @@ class GlimaCLI < Clian::Cli
       end
     end
   end
+
+  def custom_completion_for_banner(banner)
+    case banner
+    when /^USER/
+      "(#{config.general.default_user})"
+    else
+      nil
+    end
+  end
 end
 
 GlimaCLI.start(ARGV)
