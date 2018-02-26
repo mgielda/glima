@@ -30,6 +30,18 @@ require "logger"
 
 Encoding.default_external="UTF-8"
 
+# For debug
+Signal.trap('USR2') do
+  pid = Process.pid
+  STDERR.puts "[#{pid}] Received USR2 at #{Time.now}. Dumping threads:"
+  Thread.list.each do |t|
+    trace = t.backtrace.join("\n[#{pid}] ")
+    STDERR.puts "[#{pid}] #{trace}"
+    STDERR.puts "[#{pid}] ---"
+  end
+  STDERR.puts "[#{pid}] -------------------"
+end
+
 class GlimaCLI < Clian::Cli
   package_name 'GLIMA'
   remove_command :configuration
