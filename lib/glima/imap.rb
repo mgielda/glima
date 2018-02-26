@@ -12,6 +12,42 @@ module Glima
                    usessl = false, certs = nil, verify = true)
       super
       @parser = Glima::IMAP::ResponseParser.new
+
+      set_keepalive(@sock, 30) # set *TCP* Keepalive
+    end
+
+    # https://www.winehq.org/pipermail/wine-devel/2015-July/108583.html
+    # TCP_KEEPALIVE on Darwin corresponds to Linux TCP_KEEPIDLE, not TCP_KEEPINTVL.
+    #
+    # * Darwin (macOS)
+    #   /usr/include/netinet/tcp.h:
+    #     : #define TCP_KEEPALIVE  0x10    /* idle time used when SO_KEEPALIVE is enabled */
+    #  : TCP_KEEPALIVE = 0x10
+    #  : TCP_KEEPCNT   = 0x102
+    #  : TCP_KEEPINTVL = 0x101
+    # * Linux
+    #  : TCP_KEEPIDLE
+    #  : TCP_KEEPCNT
+    #  : TCP_KEEPINTVL
+    #
+    # Configurable TCP keepalives by normelton: PR #262 redis/redis-rb
+    #   https://github.com/redis/redis-rb/pull/262
+    #
+    def set_keepalive(sock, sec)
+      xTCP_KEEPIDLE = if RUBY_PLATFORM =~ /darwin/ then 0x10 else :TCP_KEEPIDLE end
+
+      idle, interval, probes = if sec >= 60
+                                 [sec - 20, 10, 2]
+                               elsif sec >= 30
+                                 [sec - 10,  5, 2]
+                               elsif sec >= 5
+                                 [sec -  2,  2, 1]
+                               end
+
+      sock.setsockopt(:SOL_SOCKET,  :SO_KEEPALIVE,  true)
+      sock.setsockopt(:IPPROTO_TCP, xTCP_KEEPIDLE,  idle)
+      sock.setsockopt(:IPPROTO_TCP, :TCP_KEEPINTVL, interval)
+      sock.setsockopt(:IPPROTO_TCP, :TCP_KEEPCNT,   probes)
     end
 
     class Xoauth2Authenticator
@@ -89,28 +125,18 @@ module Glima
 
     def_delegators :@imap,
     :fetch,
-    :select,
     :disconnected?
 
     def initialize(imap_server, authorization, logger)
       @imap_server, @authorization, @logger = imap_server, authorization, logger
+      @current_folder = nil
       connect(imap_server, authorization)
     end
 
     def wait(folder = nil, timeout_sec = 60)
+      select(folder || :all) unless @current_folder
+
       logger.info "[#{self.class}#wait] Enter"
-
-      if folder
-        folder = Net::IMAP.encode_utf7(folder)
-      else
-        # select "[Gmail]/All Mail" or localized one like "[Gmail]/すべてのメール"
-        folder = @imap.list("", "[Gmail]/*").find {|f| f.attr.include?(:All)}.name
-      end
-
-      logger.info "[#{self.class}#wait] IMAP Selecting #{Net::IMAP.decode_utf7(folder)}..."
-      @imap.select(folder)
-      logger.info "[#{self.class}#wait] IMAP Selected #{Net::IMAP.decode_utf7(folder)}"
-
       begin
         logger.info "[#{self.class}#wait] IMAP IDLE start (timeout: #{timeout_sec})"
         @imap.idle(timeout_sec) do |resp|
@@ -119,31 +145,49 @@ module Glima
         end
         logger.info "[#{self.class}#wait] IMAP IDLE done"
 
-      rescue Net::IMAP::Error => e
-        if e.inspect.include? "connection closed"
-          reconnect
-        else
-          raise
-        end
+      # rescue Net::IMAP::Error => e
+      #   if e.inspect.include? "connection closed"
+      #     reconnect
+      #   else
+      #     raise
+      #   end
       end
       logger.info "[#{self.class}#wait] Exit"
     end # def wait
 
     private
 
+    def select(folder)
+      @current_folder = folder
+
+      if folder == :all
+        # select "[Gmail]/All Mail" or localized one like "[Gmail]/すべてのメール"
+        folder = @imap.list("", "[Gmail]/*").find {|f| f.attr.include?(:All)}.name
+      else
+        folder = Net::IMAP.encode_utf7(folder)
+      end
+
+      logger.info "[#{self.class}#wait] IMAP Selecting #{Net::IMAP.decode_utf7(folder)}..."
+      @imap.select(folder)
+      logger.info "[#{self.class}#wait] IMAP Selected #{Net::IMAP.decode_utf7(folder)}"
+    end
+
     def connect(imap_server, authorization)
       logger.info "[#{self.class}#connect] Enter"
       retry_count = 0
 
       begin
-        @imap = Glima::IMAP.new(imap_server, 993, true)
-        @imap.authenticate('XOAUTH2',
-                           authorization.username,
-                           authorization.access_token)
-        logger.info "[#{self.class}#connect] connected"
+        Timeout.timeout(10) do
+          # @imap = Glima::IMAP.new(imap_server, 993, true)
+          @imap = Glima::IMAP.new(imap_server, :port => 993, :ssl => {:timeout => 10})
 
-      rescue Net::IMAP::NoResponseError => e
-        logger.info "[#{self.class}#connect] rescue Net::IMAP::NoResponseError => e"
+          @imap.authenticate('XOAUTH2',
+                             authorization.username,
+                             authorization.access_token)
+          logger.info "[#{self.class}#connect] connected"
+        end
+      rescue Timeout::Error, Net::IMAP::NoResponseError => e
+        logger.info "[#{self.class}#connect] rescue #{e}"
 
         if e.inspect.include? "Invalid credentials" && retry_count < 2
           logger.info "[#{self.class}#connect] Refreshing access token for #{imap_server}."
@@ -157,11 +201,11 @@ module Glima
       logger.info "[#{self.class}#connect] Exit"
     end
 
-    def reconnect
-      logger.info "[#{self.class}#reconnect] Enter"
-      connect(@imap_server, @authorization)
-      logger.info "[#{self.class}#reconnect] Exit"
-    end
+    # def reconnect
+    #   logger.info "[#{self.class}#reconnect] Enter"
+    #   connect(@imap_server, @authorization)
+    #   logger.info "[#{self.class}#reconnect] Exit"
+    # end
 
     def logger
       @logger
