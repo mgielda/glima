@@ -346,7 +346,7 @@ class GlimaCLI < Clian::Cli
       @client ||= Glima::GmailClient.new(config.general.client_id,
                                          config.general.client_secret,
                                          File.expand_path("token_store.yml", File.dirname(@config_path)),
-                                         @user, @datastore, @logger)
+                                         @user, @datastore, @context, @logger)
 
       Glima::Command.client ||= @client
 

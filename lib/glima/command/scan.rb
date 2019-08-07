@@ -5,7 +5,7 @@ module Glima
       def initialize(folder, format, search_or_range)
 
         index = 1
-        client.scan_batch(folder, search_or_range) do |mail|
+        client.scan_batch(folder, search_or_range, true) do |mail|
           case format
           when :mew
             puts mail.format_mew(index)

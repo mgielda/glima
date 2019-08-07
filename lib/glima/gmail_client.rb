@@ -35,7 +35,7 @@ module Glima
     # Users getProfile
     :get_user_profile
 
-    attr_reader :user
+    attr_reader :user, :context
 
     # Find nearby messages from pivot_message
     # `Nearby' message:
@@ -47,7 +47,7 @@ module Glima
       date1 = (pivot_mail.date.to_date - 1).strftime("after:%Y/%m/%d")
       date2 = (pivot_mail.date.to_date + 1).strftime("before:%Y/%m/%d")
       query = "#{from} -in:trash #{date1} #{date2}"
-      scan_batch("+all", query) do |mail|
+      scan_batch("+all", query, false) do |mail|
         next if pivot_mail.id == mail.id
         yield mail
       end
@@ -85,12 +85,13 @@ module Glima
       }.map(&:addr).map(&:ip_address).length > 0
     end
 
-    def initialize(client_id, client_secret, token_store_path, user, datastore, logger = nil)
+    def initialize(client_id, client_secret, token_store_path, user, datastore, context, logger = nil)
       @client_id = client_id
       @client_secret = client_secret
       @token_store_path = token_store_path
       @user = user
       @datastore = datastore
+      @context = context
       @client = Google::Apis::GmailV1::GmailService.new
       @client.client_options.application_name = 'glima'
       if logger
@@ -180,8 +181,8 @@ module Glima
       end
     end
 
-    def scan_batch(folder, search_or_range = nil, &block)
-      qp = Glima::QueryParameter.new(folder, search_or_range)
+    def scan_batch(folder, search_or_range = nil, update_context = true, &block)
+      qp = Glima::QueryParameter.new(folder, search_or_range, context)
       list_user_messages(me, qp.to_hash) do |res, error|
         fail "#{error}" if error
         ids = (res.messages || []).map(&:id)
@@ -189,7 +190,7 @@ module Glima
           batch_on_messages(ids) do |message|
             yield Glima::Resource::Mail.new(message) if block
           end
-          # context.save_page_token(res.next_page_token)
+          context.save_page_token(res.next_page_token) if update_context
         end
       end
     rescue Glima::QueryParameter::FormatError => e
