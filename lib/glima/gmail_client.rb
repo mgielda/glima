@@ -45,7 +45,7 @@ module Glima
     def nearby_mails(pivot_mail)
       from  = "from:#{pivot_mail.from}"
       date1 = (pivot_mail.date.to_date - 1).strftime("after:%Y/%m/%d")
-      date2 = (pivot_mail.date.to_date + 1).strftime("before:%Y/%m/%d")
+      date2 = (pivot_mail.date.to_date + 2).strftime("before:%Y/%m/%d")
       query = "#{from} -in:trash #{date1} #{date2}"
       scan_batch("+all", query, false) do |mail|
         next if pivot_mail.id == mail.id
