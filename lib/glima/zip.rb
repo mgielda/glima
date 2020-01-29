@@ -113,7 +113,13 @@ module Glima
     end
 
     def with_input_stream(password = "", &block)
-      ::Zip::InputStream.open(StringIO.new(@zip_string), 0, decrypter(password)) do |zis|
+      # I have to read entire content of @zip_string to avoid the problems on
+      # `general purpose flag Bit 3 is set`
+      #
+      zip_stringio = ::Zip::File.open_buffer(@zip_string).write_buffer
+      zip_stringio.rewind
+
+      ::Zip::InputStream.open(zip_stringio, 0, decrypter(password)) do |zis|
         yield zis
       end
     end
