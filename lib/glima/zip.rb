@@ -6,7 +6,7 @@ module Glima
     attr_accessor :password
 
     def self.read(zip_filename, password = "")
-      new(File.open(File.expand_path(zip_file)).read, password)
+      new(File.open(File.expand_path(zip_filename)).read, password)
     end
 
     def initialize(zip_string, password = "")
