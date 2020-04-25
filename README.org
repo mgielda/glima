@@ -99,6 +99,33 @@
        :
      #+END_SRC
 
+* Usage
+  #+begin_src example
+    GLIMA commands:
+      glima auth                          # Authenticate interactively
+      glima dezip MSGID DIRECTORY         # Decrypt zip found in MSGID to DIRECTORY
+      glima events SINCE                  # List operation history SINCE.
+      glima guess MSGID                   # Guess labels to add to MSGID
+      glima help [COMMAND]                # Describe available commands or one specific command
+      glima init                          # Create new config file
+      glima label MSGID                   # Add/Remove labels to/from MSGID
+      glima labels                        # List labels
+      glima open MSGID                    # Open article in browser by MSGID
+      glima profile                       # Show user's profile.
+      glima push EMAIL_FILE               # Push EMAIL_FILE to INBOX
+      glima relabel SOURCE TARGET         # Rename label SOURCE to TARGET.
+      glima scan +LABEL [QUERY]           # Scan LABEL with QUERY.
+      glima show MSGID                    # Show article.
+      glima trash MSGID ...               # Move messages to trash
+      glima version                       # Show version
+      glima watch QUEUE_LABEL MARK_LABEL  # Watch gmail server and xzip.
+      glima xzip TARGET                   # Transform zip-attachments in TARGET and push back to Gmail.
+
+    Options:
+      [--profile], [--no-profile]  # Set profiler flag
+      [--user=USER]                # Set Gmail/IMAP account
+  #+end_src
+
 * Invoke decrypter from emacs mailer (Mew)
   Minimum setup: add belows in your .emacs:
   #+BEGIN_SRC emacs-lisp
