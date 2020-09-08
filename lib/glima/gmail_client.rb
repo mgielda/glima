@@ -225,7 +225,7 @@ module Glima
       @authorizer ||= Clian::Authorizer.new(
         @client_id,
         @client_secret,
-        Google::Apis::GmailV1::AUTH_SCOPE,
+        Google::Apis::GmailV1::AUTH_GMAIL_READONLY,
         @token_store_path
       )
     end
