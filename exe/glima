@@ -197,7 +197,7 @@ class GlimaCLI < Clian::Cli
   ################################################################
   desc "scan +LABEL [QUERY]", "Scan LABEL with QUERY."
 
-  method_option :format, :desc => "Set printing format", :enum => %w(mew text archive)
+  method_option :format, :desc => "Set printing format", :enum => %w(mew text archive legible)
 
   def scan(folder, search_or_range = nil)
     format = options[:format].to_s.to_sym
